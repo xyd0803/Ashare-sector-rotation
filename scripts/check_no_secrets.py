@@ -15,6 +15,13 @@ check_no_secrets.py —— 提交前敏感信息自检（凭证 / 个人路径 /
   python scripts/check_no_secrets.py --staged   # 只扫暂存区（pre-commit 钩子用）
   python scripts/check_no_secrets.py --quiet    # 只输出结论，不列出干净文件
 
+分支感知（--private-mode）
+--------------------------
+私有备份分支（默认名以 ``local-backup`` 开头）上，``data/`` ``runs/`` 等目录与
+个人绝对路径是**预期的**，检查会豁免这两类规则；
+但**凭证规则与 mcp.json/.env/私钥路径黑名单永远生效**——私有备份同样可能是泄露源。
+默认 auto 按当前分支判断，也可用 ``--private-mode on/off`` 强制。
+
 退出码
 ------
   0  干净
@@ -51,8 +58,8 @@ FORBIDDEN_DIR = [
     ("__pycache__", "Python 字节码缓存"),
 ]
 
-# ---------- 2. 内容里的凭证特征 ----------
-CONTENT_RULES = [
+# ---------- 2a. 凭证特征（任何分支都不得命中，私有备份同样不行） ----------
+CRED_RULES = [
     # 变量名像密钥，且赋了 12 位以上的字面量（排除值为变量名/表达式的情况）
     (re.compile(
         r"""(?i)\b(api[_-]?key|apikey|em_api_key|mx_apikey|access[_-]?key|accesskey|
@@ -70,13 +77,21 @@ CONTENT_RULES = [
 
     # JWT（MCP / 网关类鉴权常见）
     (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."), "疑似 JWT"),
+]
 
-    # 本机绝对路径（会把用户名带进仓库）
-    # 注：字面量拆成两段拼接，避免本脚本自身的源码被这几条规则误命中（自指误报）。
+# ---------- 2b. 个人绝对路径（会被用户名带进公开历史） ----------
+# 私有备份分支上豁免：本机路径在 data/、runs/ 里不可避免，且该分支不外发。
+# 注：字面量拆成两段拼接，避免本脚本自身的源码被这几条规则误命中（自指误报）。
+PII_RULES = [
     (re.compile(r"[A-Za-z]:[\\/]+Use" r"rs[\\/]+[^\\/\s\"']+"), "Windows 个人绝对路径（含用户名）"),
     (re.compile(r"(?<![\w])/Us" r"ers/[^/\s\"']+"), "macOS 个人绝对路径（含用户名）"),
     (re.compile(r"(?<![\w])/ho" r"me/[^/\s\"']+"), "Linux 个人绝对路径（含用户名）"),
 ]
+
+# 私有备份分支：这些目录在这里是「合法内容」，不是误入仓。
+# 注意 FORBIDDEN_PATH（mcp.json / .env / 私钥）**不在**豁免之列。
+PRIVATE_BRANCH_PREFIX = "local-backup"
+FORBIDDEN_DIR_EXEMPT_ON_PRIVATE = {"data", "runs", "archive", "drafts", "logs"}
 
 # 命中这些词的行视为已知安全（参数指纹是设计的一部分，不是密钥）
 SAFE_LINE_HINTS = ("params_fingerprint", "fingerprint", "sha256", "sha1", "md5")
@@ -112,8 +127,12 @@ def _list_targets(staged):
     return [p.replace("\\", "/") for p in out.split("\0") if p.strip()], ""
 
 
-def _check_path(path):
-    """路径级规则：返回问题描述列表。"""
+def _check_path(path, private=False):
+    """路径级规则：返回问题描述列表。
+
+    private=True（私有备份分支）时豁免「不该入仓的目录」，
+    但 mcp.json / .env / 私钥这类路径黑名单始终生效。
+    """
     problems = []
     for pattern, why in FORBIDDEN_PATH:
         if pattern.search(path):
@@ -121,6 +140,8 @@ def _check_path(path):
     parts = path.split("/")
     for bad_dir, why in FORBIDDEN_DIR:
         if bad_dir in parts[:-1]:
+            if private and bad_dir in FORBIDDEN_DIR_EXEMPT_ON_PRIVATE:
+                continue
             problems.append(f"位于不该入仓的目录 {bad_dir}/：{why}")
             break
     return problems
@@ -133,18 +154,23 @@ def _mask(text):
     return text[:4] + "*" * min(12, len(text) - 4)
 
 
-def _check_content(path):
-    """内容级规则：返回 [(行号, 说明, 打码片段)]。"""
+def _check_content(path, private=False):
+    """内容级规则：返回 [(行号, 说明, 打码片段)]。
+
+    凭证规则恒定生效；个人绝对路径规则在私有备份分支豁免
+    （data/ 与 runs/ 里出现本机路径不可避免，且该分支不外发）。
+    """
     hits = []
     with open(path, "rb") as fh:
         raw = fh.read(MAX_BYTES + 1)
     if len(raw) > MAX_BYTES or b"\x00" in raw[:4096]:
         return hits                      # 过大或二进制，跳过
+    rules = CRED_RULES if private else CRED_RULES + PII_RULES
     text = raw.decode("utf-8", errors="replace")
     for lineno, line in enumerate(text.splitlines(), start=1):
         if any(hint in line for hint in SAFE_LINE_HINTS):
             continue
-        for pattern, why in CONTENT_RULES:
+        for pattern, why in rules:
             match = pattern.search(line)
             if match:
                 snippet = match.group(0)
@@ -153,16 +179,32 @@ def _check_content(path):
     return hits
 
 
+def _current_branch():
+    """当前分支名。未提交的新分支（unborn）也能取到，`rev-parse` 则取不到。"""
+    ok, out = _run_git(["symbolic-ref", "--short", "HEAD"])
+    return out.strip() if ok else ""
+
+
 def main():
     ap = argparse.ArgumentParser(description="提交前敏感信息自检（fail-closed）")
     ap.add_argument("--staged", action="store_true", help="只检查暂存区（pre-commit 用）")
     ap.add_argument("--quiet", action="store_true", help="只输出结论")
+    ap.add_argument("--private-mode", choices=("auto", "on", "off"), default="auto",
+                    help="私有备份分支模式：豁免个人路径与禁入目录，凭证规则仍强制（默认 auto=按分支判断）")
     args = ap.parse_args()
 
     ok, _ = _run_git(["rev-parse", "--is-inside-work-tree"])
     if not ok:
         print("[FAIL] 当前目录不是 git 仓库，无法确定检查范围。请先在仓库根目录执行。", file=sys.stderr)
         return 2
+
+    branch = _current_branch()
+    if args.private_mode == "on":
+        private = True
+    elif args.private_mode == "off":
+        private = False
+    else:
+        private = branch.startswith(PRIVATE_BRANCH_PREFIX)
 
     targets, err = _list_targets(args.staged)
     if targets is None:
@@ -172,12 +214,15 @@ def main():
     if not args.quiet:
         scope = "暂存区" if args.staged else "已跟踪 + 未忽略的新文件"
         print(f"[check] 检查范围：{scope}，共 {len(targets)} 个文件")
+        if private:
+            print(f"[check] 分支 {branch or '(unborn)'}：私有备份模式 —— "
+                  f"个人路径与 data/runs 等目录豁免，凭证规则仍然强制")
 
     findings = []          # [(path, [问题...])]
     for path in targets:
-        problems = _check_path(path)
+        problems = _check_path(path, private=private)
         try:
-            for lineno, why, snippet in _check_content(path):
+            for lineno, why, snippet in _check_content(path, private=private):
                 problems.append(f"L{lineno} {why} → {snippet}")
         except (OSError, PermissionError) as exc:
             problems.append(f"无法读取（按不通过处理）：{exc}")
@@ -186,7 +231,8 @@ def main():
 
     print()
     if not findings:
-        print(f"[PASS] {len(targets)} 个文件全部通过：无凭证字面量、无个人绝对路径、无禁入目录。")
+        suffix = "（私有备份模式）" if private else ""
+        print(f"[PASS] {len(targets)} 个文件全部通过：无凭证字面量、无个人绝对路径、无禁入目录。{suffix}")
         return 0
 
     print(f"[FAIL] {len(findings)} 个文件存在问题，已阻断：")
