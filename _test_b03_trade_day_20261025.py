@@ -13,6 +13,8 @@ _test_b03_trade_day_20261025.py —— B-03「交易日机械过滤」注入式�
   T6 存量审计：现有缓存无（A 股）非交易日点
 
 用法：python _test_b03_trade_day_20261025.py
+      python _test_b03_trade_day_20261025.py --require-calendar
+          （日历为空时报错而非跳过；本地有 data/index_daily_pb 时用）
 """
 from __future__ import annotations
 
@@ -34,6 +36,9 @@ BANDS = HERE / "data" / "meta" / "pb_daily_bands.json"
 TMP = HERE / ".rt_tmp" / "b03"
 TEST_CODE = "T9999.CSI"          # 合成标的（测试后必删）
 
+# 日历为空时默认跳过（仓库不含数据）；本地开发用 --require-calendar 强制要求。
+REQUIRE_CALENDAR = "--require-calendar" in sys.argv
+
 PASS, FAIL = [], []
 
 
@@ -54,6 +59,22 @@ def main() -> int:
     cal = tc.load_calendar()
     cn = (cal.get("markets") or {}).get("cn") or {}
     days = cn["days"]
+
+    # 交易日历由 data/index_daily_pb 的多序列投票推导（见 trade_calendar.py）。
+    # 公开仓库按设计不含任何数据，因此干净克隆里日历为空 —— 此时无法判定交易日。
+    # 按本项目的 fail-closed 原则，缺日历**不能**退化成「只有周末休市」：
+    # 那会把国庆、春节当成交易日，比直接拒答更危险。
+    # 故此处显式跳过，并用 --require-calendar 让本地开发强制要求日历可用。
+    if not days:
+        if REQUIRE_CALENDAR:
+            print("  [FAIL] 要求日历可用，但 cn 日历为空（先构建 data/index_daily_pb）")
+            return 1
+        print("== 0. 前置：cn 日历为空 ==")
+        print("  [SKIP] 交易日历需由本地 data/index_daily_pb 投票推导；仓库不含数据。")
+        print("         本地验证请加 --require-calendar。")
+        print("\n跳过 B-03（0 项判定）：日历不可用，无法评估。")
+        return 0
+
     print(f"== 0. 前置：cn 日历 {cn['n']} 个交易日（{cn['start']}~{cn['end']}）==")
     check("cn 日历可用", bool(cn.get("available")))
 
