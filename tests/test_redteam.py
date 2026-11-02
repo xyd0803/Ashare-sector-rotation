@@ -1,0 +1,59 @@
+"""Run the project's red-team suites under pytest.
+
+Each ``_test_*_20261025.py`` file is a standalone script with its own PASS/FAIL
+accounting and a non-zero exit code on failure. They were never pytest tests and
+renaming them to ``test_*.py`` would not have made them into any: they define no
+``test_*`` functions. More importantly, their filenames are the "evidence" side
+of the pitfall-closure registry -- ``check_pitfall_closure.py`` verifies that
+every documented pitfall points at a test file that actually exists and passes,
+so renaming would quietly break that guarantee.
+
+Wrapping them is the honest option: pytest discovers and reports them
+individually, each keeps its own output, and a failure surfaces the tail of the
+child process output instead of a bare exit code.
+
+The suites are offline by design: they inject fixed price feeds rather than
+calling a vendor. One case (D-7/D-8's T10) drives a full pipeline and therefore
+needs fresh local data; it is skipped unless run with ``--with-integration``.
+"""
+import os
+import subprocess
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# (filename, what it guards) -- grouped for readable test ids.
+SUITES = [
+    ("_test_b03_trade_day_20261025.py", "trading-calendar point alignment"),
+    ("_test_card_null_20261025.py", "verdict card renders null fields"),
+    ("_test_closure_gate_20261025.py", "pitfall-closure checker really fires"),
+    ("_test_d7_d8_20261025.py", "dual-source price cross-check + data health states"),
+    ("_test_ifind_budget_gate_20261025.py", "iFinD budget gate and ledger"),
+    ("_test_merge_regress_20261025.py", "valuation-gap merge stays bit-identical"),
+    ("_test_s16_batch_resilience_20261025.py", "batch survives empty/failing connector"),
+]
+IDS = [name.removeprefix("_test_").removesuffix("_20261025.py") for name, _ in SUITES]
+
+
+@pytest.mark.parametrize("filename,purpose", SUITES, ids=IDS)
+def test_redteam_suite(filename, purpose):
+    path = os.path.join(ROOT, filename)
+    assert os.path.isfile(path), "red-team script missing: %s" % filename
+
+    proc = subprocess.run(
+        [sys.executable, filename],
+        cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=600,
+    )
+
+    if proc.returncode != 0:
+        # Show the tail: these scripts print per-assertion lines, and the failing
+        # one is almost always near the end.
+        tail = "\n".join((proc.stdout or "").splitlines()[-40:])
+        err = "\n".join((proc.stderr or "").splitlines()[-20:])
+        pytest.fail(
+            "%s (%s) exited %d\n--- stdout (tail) ---\n%s\n--- stderr (tail) ---\n%s"
+            % (filename, purpose, proc.returncode, tail, err)
+        )

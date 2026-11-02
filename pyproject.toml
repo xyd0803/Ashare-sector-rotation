@@ -1,0 +1,40 @@
+# This project is not distributed as a pip-installable package: it is a set of
+# scripts you run from the repository root. There is deliberately no [project]
+# table here, so `pip install .` cannot create a broken half-package.
+#
+# What this file *does* provide is a single source of truth for how the tooling
+# behaves locally and in CI, so "works on my machine" has a narrower meaning.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The red-team suites at the repository root end in `_test.py`-like names but are
+# standalone scripts, not pytest modules; restricting collection to tests/ keeps
+# them from being imported twice.
+norecursedirs = ["data", "runs", "archive", "drafts", "logs", ".git", "__pycache__"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:discipline",
+]
+
+[tool.ruff]
+line-length = 110
+# 3.10 is the true floor: several modules use `X | None` annotations without
+# `from __future__ import annotations`, which is a syntax-level requirement.
+target-version = "py310"
+exclude = ["data", "runs", "archive", "drafts", "logs", ".git"]
+
+[tool.ruff.lint]
+# Start from a deliberately small rule set. A long disabled-list reads as noise
+# to a reviewer; a short enabled-list reads as intent.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line length is handled by the formatter, not the linter
+    "B008",   # function call in default arg (argparse idiom)
+    "UP006",  # List[...] vs list[...]: kept for 3.8-era compatibility
+    "UP007",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Red-team scripts print deliberately and import modules after sys.path surgery.
+"_test_*.py" = ["E402", "I001"]
+"tests/*" = ["E402"]

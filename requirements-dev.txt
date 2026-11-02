@@ -1,0 +1,9 @@
+# Development / CI dependencies. Runtime needs are in requirements.txt.
+-r requirements.txt
+
+pytest>=7.4
+
+# Optional, local only (not run in CI): a linter is useful while editing the
+# newer tooling, but gating the build on it before the legacy engine is
+# reformatted would mean a permanently red check that everyone learns to ignore.
+#   pip install ruff && ruff check scripts tests
