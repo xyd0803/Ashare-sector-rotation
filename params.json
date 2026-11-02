@@ -1,0 +1,460 @@
+{
+ "schema": "xyd-sector-discipline-params",
+ "version": "1.11.0",
+ "frozen_at": "2026-09-01",
+ "source": "供需驱动板块投资框架.md (2026-08-14 A/B/C 三层级纪律补丁版)",
+ "note": "本文件是纪律层唯一参数源。任何数值改动必须 bump version 并在 CHANGELOG 记录理由，否则 guards.params_fingerprint 校验会告警（防偷偷调参/过拟合）。v1.1.0(2026-08-15)：新增 win_base_downgrade 量升价跌·成本通缩降档通道。v1.2.0(2026-08-15)：行业按估值主锚分类（PB/PE/PE+PB动态混合 blend），引擎锚分发 + 数据双源验证gate(gate_dual_source) + finalgate(gate_final) 三道闸落地（用户裁定）。v1.3.0(2026-08-15)：新增 win_quant 五维加权量化胜率（§十二），胜率由客观指标确定性算出、禁止 LLM 主观拍定；g(S) 初值仅占位，待 54 ETF 历史回测校准。引擎 base 计算：有量化指标输入走五维、无则回退六档表（向后兼容）。v1.4.0(2026-08-16)：新增 ev_fundamental_overlay（O2/O3 EV 基本面相位叠加+下行地板，关 V2/V3）+ pb_pct_bands.bubble_pct_max=95（O4 对称泡沫硬否决）。v1.5.0(2026-08-16)：O6 BLEND 自适应权重（valuation_anchor.BLEND_WEIGHTS 按行业细分，关 V6，discipline._blend_weights 解析替代全局0.6/0.4）+ O7 新鲜度收紧（freshness_max_days 60→15 约10交易日；新增 freshness_warn_days=7 预警档，关 V8）。v1.6.0(2026-08-16)：O8 EV 显式持有期/年化（ev_horizon.default_horizon_months=24，年化=(1+ev)^(12/H)-1，关 V7）+ O9 制度周期断裂检测（gates.regime_full_cycle_min_years=4.0 / regime_break_use_10y=true；5y窗口<4年或上游标记 regime_break→有效分位切10y+SHOULD告警，关 V12）+ O10 组合层 conviction cap（position.conviction_cap=0.60 / single_high_conviction_threshold=0.30；Verdict.conviction_score=仓位×胜率/100 跨板块可比风险预算，关 V9/V10 文档缺口）。v1.7.0(2026-08-18)：O-双价格 强制溯源闸门（gates.divergence_sectors 关键词注册表 + discipline._sector_needs_dual_price + run() 对分歧行业无 dual_price_data 即阻断 + ⑪清单缺失即fail + 量价方向一致性/价源溯源校验，修复512690酒ETF误判根因：原 dual_price_data 为可选字段、缺失时闸门直接判通过→出厂提价被误读为量缩价升看涨）。v1.8.0(2026-08-29)：§三bis 景气环比门槛（买点加景气环比门槛防价值陷阱，分左侧/右侧买点）。新增 gates.prosperity_left_min_mom=0.0（左侧：景气环比≥0 企稳方放行，否则=低PB接刀→标左侧价值陷阱）/ prosperity_right_min_mom=0.0（右侧：景气环比>0 回升方确认，否则量价确认与景气背离→假突破预警）。未提供景气数据→仅建议性不强制（向后兼容、零回归）。硬信号增 #8 左侧景气环比下行·价值陷阱（与#3同质 win-10+红圈）。 v1.9.0(2026-09-01)：V4 胜率刻度置信治理（win_quant.shrink=0.5：g(S) 未经验证占位时 W 向基准50%收缩、标 LOW 置信，纪律重心转 EV三档+硬否决，落实2026-08-16校准报告§五.3；真实 D1-D5 接入并跑 calibrate_winrate 验证 AUC>0.55 后，置 validated=true+shrink=1.0 解除收缩）+ V10 泡沫延伸检测（odds.anchor_exclusion_months=18/bubble_warn_ratio=1.3/bubble_hard_ratio=1.6：用剔除近18个月的锚定 p95 检测涨过头，关掉 trailing-window 滞后致触发偏晚的漏洞，类似2021新能车）。新增 win_adjust.bubble_hard=-20/bubble_warn=-10。 v1.11.0(2026-09-08)：新增 p_star 段（风险调整买点 P*：r=r_base(W)×s_vol(σ_eff) 夹[3%,60%]；σ_eff=σ_ann√(H/12)、s_vol=clamp(σ_eff/30%,0.25,2.0)；止损+摩擦走 bear_eff=max(bear,P(1−stop−fric)) 不进 r；胜率饱和 soft(softplus k=0.02)；σ 解析链 显式>序列派生>资产默认>缺→s_vol=1.0 零回归；P* 只读不参与仓位/回测）+ win_quant.win_map_mode=convex/γ=1.5（g(S) 段内凸，linear 通道保留逐位一致）。",
+ "win_base": {
+  "_source": "§12.1 六档基础胜率表（唯一机械映射源）",
+  "up|up": 80,
+  "up|flat": 65,
+  "flat|up": 55,
+  "down|up": 45,
+  "up|down": 0,
+  "down|down": 0
+ },
+ "win_base_extended": {
+  "_source": "框架六档未覆盖的枚举组合，代码为完备性补全，trace 标 [EXTENDED] 需人工确认，不得当框架原档引用",
+  "flat|flat": 40,
+  "down|flat": 35,
+  "flat|down": 0
+ },
+ "win_base_downgrade": {
+  "base_win_rate_up_down": 25,
+  "cap_win_rate_pct": 40,
+  "position_cap": 0.15,
+  "_source": "§12.1b 量升价跌·成本通缩/以价换量 降档通道（2026-08-15 用户裁定，替代价跌硬置零）",
+  "_require": "volume=up & demand=growth & price_decline_nature=cost_deflation（显式声明，缺一仍硬否决 0%）",
+  "_why": "价跌否决的设计初衷是『价跌无板块牛市』（供过于求价格战/需求坍塌）。但对『量升价跌·成本通缩/以价换量』型（如电池：装车+41.6%/储能+75% 量升，电芯价跌源于锂价成本传导），需求结构性高增+产能利用率高（开工85%+），直接归零过于严苛：结构性增长下量是主引擎，价跌是成本曲线下移的结果而非需求崩坏。故开放降档通道：胜率基础25%、封顶40%、仓位≤15%，其余量缩价跌/量稳价跌/oversupply_war/demand_collapse/未声明 仍 0% 硬否决，核心纪律不动。",
+  "_battery_example": "电池159796：量升价跌+cost_deflation → 25%基础+想象A5+催化5=35%，≤40%封顶；仓位9.9%×尾部×0.5×0.7≈3.5%『谨慎参与』，不再 0%。"
+ },
+ "win_adjust": {
+  "_source": "§12.1 修正项白名单（禁自创）",
+  "forward_up": 5,
+  "forward_down": -10,
+  "pb_pct_low": 5,
+  "pb_pct_high": -5,
+  "imagination_S": 5,
+  "imagination_A": 5,
+  "imagination_C": -10,
+  "crowding": -5,
+  "catalyst": 5,
+  "extreme_optimistic_hit": -10,
+  "bubble_warn": -10,
+  "bubble_hard": -20,
+  "value_trap": -10
+ },
+ "win_clamp": {
+  "_source": "§12.1 想象力类与前瞻类合并 clamp[-10,+10]；全局封顶90/封底5",
+  "group_imag_forward_min": -10,
+  "group_imag_forward_max": 10,
+  "global_min": 5,
+  "global_max": 90
+ },
+ "pb_pct_bands": {
+  "_source": "§四 PB分位参考标准 = §六 Step3 = §十 标准仓位（三处已对齐）",
+  "excellent_max": 30,
+  "neutral_max": 60,
+  "high_max": 80,
+  "win_low_threshold": 30,
+  "win_high_threshold": 70,
+  "value_trap_pct_max": 20,
+  "bubble_pct_max": 95
+ },
+ "ev_fundamental_overlay": {
+  "_source": "O2/O3 治本动作（2026-08-16 用户裁定）：EV 基本面相位叠加 + 下行地板，关 V2/V3。仅在基本面恶化（盈利下修/前瞻↓/需求侵蚀或塌方）时生效：对纯统计分位下行 d_bear 叠加基本面地板，并对上行空间 u_mid/u_opt 做盈利下行折价。参数为保守上限，待 54 ETF 回测校准后可微调（改动须 bump version）。",
+  "earnings_decline_haircut_beta": 0.5,
+  "downside_floor_min_pp": 10.0,
+  "downside_floor_max_pp": 40.0,
+  "collapse_downside_floor_pp": 30.0
+ },
+ "ev_horizon": {
+  "_source": "O8 (2026-08-16 用户裁定)：EV 原 horizon-agnostic（点估计回归至 p50），3个月与3年回归 EV 数值相同、跨板块不可比。新增显式持有期与年化：默认 horizon_months=24（约2年，与供需周期半程匹配），可由输入 ev_horizon_months 覆盖；年化 = (1+ev/100)^(12/H) − 1。注明：年化仅为跨板块可比口径，非收益保证。",
+  "default_horizon_months": 24,
+  "annualize": true
+ },
+ "position": {
+  "_source": "§十 仓位调控公式",
+  "base_by_pb_pct": {
+   "excellent": 0.3,
+   "neutral": 0.15,
+   "high": 0.1
+  },
+  "imagination_coef": {
+   "S": 1.2,
+   "A": 1.1,
+   "B": 1.0,
+   "C": 0.7,
+   "D": 0.0
+  },
+  "vp_coef": {
+   "up|up": 1.0,
+   "up|flat": 0.8,
+   "flat|up": 0.6,
+   "down|up": 0.6,
+   "flat|flat": 0.6,
+   "down|flat": 0.6
+  },
+  "forward_coef": {
+   "up": 1.2,
+   "flat": 1.0,
+   "down": 0.7
+  },
+  "single_sector_cap": 0.4,
+  "left_side_channel_cap": 0.1,
+  "conviction_cap": 0.6,
+  "single_high_conviction_threshold": 0.3
+ },
+ "odds": {
+  "_source": "§12.2 五档参考线 + §12.5 极端情景层",
+  "percentiles": [
+   5,
+   20,
+   50,
+   80,
+   95
+  ],
+  "extreme_down_red_flag": 30.0,
+  "extreme_down_vs_pessimistic_multiple": 2.0,
+  "extreme_ratio_conservative_below": 1.0,
+  "extreme_optimistic_hit_ratio": 0.9,
+  "odds_score_split": 50,
+  "win_split": 50,
+  "tail_downgrade_coef": 0.5,
+  "tail_conservative_coef": 0.7,
+  "anchor_exclusion_months": 18,
+  "bubble_warn_ratio": 1.3,
+  "bubble_hard_ratio": 1.6,
+  "_tail_coef_note": "§12.5.2『结论降一档』『须显著偏保守』的可执行落地：左尾极厚→仓位×0.5，极端赔率比<1→仓位×0.7。不落到仓位上的警示等于没有纪律。",
+  "_v10_note": "V10 泡沫延伸检测(2026-09-01)：trailing 5y p95 在两年慢牛中会随价上行而滞后，导致『涨过头区』触发偏晚（类似2021新能车）。改用『锚定 p95』= 剔除近 anchor_exclusion_months(18)个月后的序列 p95 作稳定基线：now/锚定p95≥bubble_warn_ratio(1.3)→泡沫延伸警示(SHOULD,收紧O4前瞻↑豁免)；≥bubble_hard_ratio(1.6)→强制减仓/清仓(MUST,关闭O4前瞻↑豁免)。需 pb_series 日频真实序列方生效，否则回退原有 p95×0.9 触发。"
+ },
+ "gates": {
+  "_source": "§零 适用边界 / §8.1 板块硬信号必勾清单 / §12.1 硬否决 gate。freshness_max_days=15（约10交易日，O7 收紧自 60，关 V8：PB分位/动量为快变量，60天足以错过整段行情）；freshness_warn_days=7 为偏旧预警档（warning 非 blocker，提示分位带可能漂移）。",
+  "allowed_asset_class": [
+   "sector",
+   "theme"
+  ],
+  "rejected_asset_class": [
+   "broad",
+   "commodity",
+   "bond",
+   "money"
+  ],
+  "freshness_max_days": 15,
+  "freshness_warn_days": 7,
+  "percentile_period_allowed": [
+   "5y",
+   "10y"
+  ],
+  "percentile_period_decision_primary": "5y",
+  "percentile_period_forbidden": [
+   "all",
+   "全历史",
+   "inception"
+  ],
+  "bottom_signals_channel_min": 3,
+  "erosion_signals_confirm_min": 2,
+  "constituent_pb_dispersion_max_pp": 40.0,
+  "percentile_window_min_years": 2.0,
+  "regime_full_cycle_min_years": 4.0,
+  "regime_break_use_10y": true,
+  "prosperity_left_min_mom": 0.0,
+  "prosperity_right_min_mom": 0.0,
+  "pb_cross_src_max_diff_pct": 5.0,
+  "pb_manual_max_diff_pct": 20.0,
+  "divergence_sectors": {
+   "_source": "O-双价格 强制溯源闸门（2026-08-18 用户裁定，修复512690酒ETF误判根因）：存在 出厂/官方价 vs 市场成交价 分层的行业，输入必须提供 dual_price_data（含 records 分层序列），否则量价不可信、结论标待核验。关键词匹配 sector/index_name/index_code（避免自由文本漏判）。",
+   "keywords": [
+    "白酒",
+    "酒",
+    "食品饮料",
+    "食品",
+    "饮料",
+    "医药",
+    "cxo",
+    "集采",
+    "创新药",
+    "生物",
+    "房地产",
+    "地产",
+    "物业",
+    "猪",
+    "生猪",
+    "养殖",
+    "农业",
+    "种植",
+    "煤炭",
+    "有色",
+    "金属",
+    "锂",
+    "能源",
+    "石油",
+    "半导体",
+    "芯片",
+    "半导体制造",
+    "封测",
+    "稀土"
+   ],
+   "dual_layer_note": "白酒=出厂价vs批价/终端；医药=集采招标价vs院内/渠道实价；地产=备案限价vs成交/二手挂牌；猪/农业=集团挂牌vs屠宰批发；煤炭/有色/锂/能源=长协价vs现货；半导体=代工长协vs现货渠道。"
+  },
+  "forward_evidence_required": true
+ },
+ "valuation_blend": {
+  "_source": "§估值主锚 BLEND（PE+PB 动态混合）权重；PE 偏向前瞻盈利、PB 偏重资产安全边际，默认 PE 权重更高（成长/周期切换期盈利信号更灵敏）；属用户裁定可调项，改动须 bump version。",
+  "pe_weight": 0.6,
+  "pb_weight": 0.4
+ },
+ "win_quant": {
+  "_source": "§十二 五维加权量化胜率（2026-08-15 用户裁定：胜率须由客观指标确定性算出，禁止 LLM 主观拍定）。权重严格按用户给定：D1价格强度42% / D2量能27% / D3资金13% / D4预期10% / D5结构8%。各维分数由固定阈值映射表算出（非 AI 临时选），行业适配代理用固定映射表 INDUSTRY_PROXY（周期看库存/开工率、科技看订单/出货量、消费看动销/社零）。综合分 S=Σw_i·D_i 确定性线性组合；胜率 W=g(S) 由 win_map 分段映射。★ g(S) 初值仅占位：地板20%/天花板80%，待 54 ETF 历史回测校准后替换（改动须 bump version）。 v1.11.0(2026-09-08)：g(S) 增段内凸模式 win_map_mode=convex/γ=1.5（linear 通道保留且逐位等于旧值）；段内凸=曲线位于弦下方、锚点不变、单调不减，节点为凹折点（锚点集 S 型，全局凸不可达）。",
+  "weights": {
+   "D1": 0.42,
+   "D2": 0.27,
+   "D3": 0.13,
+   "D4": 0.1,
+   "D5": 0.08
+  },
+  "d1": {
+   "mom_w": 0.6,
+   "pct_w": 0.4,
+   "mom_score": [
+    [
+     -30,
+     0
+    ],
+    [
+     -10,
+     25
+    ],
+    [
+     0,
+     50
+    ],
+    [
+     10,
+     75
+    ],
+    [
+     20,
+     100
+    ]
+   ]
+  },
+  "d2": {
+   "vol_w": 0.45,
+   "inv_w": 0.3,
+   "util_w": 0.25,
+   "vol_score": [
+    [
+     -20,
+     0
+    ],
+    [
+     0,
+     50
+    ],
+    [
+     10,
+     70
+    ],
+    [
+     30,
+     100
+    ]
+   ],
+   "inv_score": [
+    [
+     20,
+     0
+    ],
+    [
+     5,
+     30
+    ],
+    [
+     0,
+     55
+    ],
+    [
+     -10,
+     80
+    ],
+    [
+     -25,
+     100
+    ]
+   ],
+   "util_score": [
+    [
+     60,
+     30
+    ],
+    [
+     70,
+     50
+    ],
+    [
+     80,
+     70
+    ],
+    [
+     90,
+     90
+    ],
+    [
+     95,
+     100
+    ]
+   ]
+  },
+  "d3": {
+   "flow_map": [
+    [
+     -20,
+     0
+    ],
+    [
+     -5,
+     30
+    ],
+    [
+     0,
+     50
+    ],
+    [
+     10,
+     75
+    ],
+    [
+     25,
+     100
+    ]
+   ],
+   "turn_map": [
+    [
+     -20,
+     0
+    ],
+    [
+     -5,
+     30
+    ],
+    [
+     0,
+     50
+    ],
+    [
+     10,
+     75
+    ],
+    [
+     25,
+     100
+    ]
+   ]
+  },
+  "d5": {
+   "ma_w": 0.5,
+   "break_w": 0.3,
+   "div_w": 0.2
+  },
+  "win_map": [
+   [
+    0,
+    20
+   ],
+   [
+    25,
+    35
+   ],
+   [
+    40,
+    48
+   ],
+   [
+    55,
+    60
+   ],
+   [
+    70,
+    70
+   ],
+   [
+    85,
+    80
+   ]
+  ],
+  "shrink": 0.5,
+  "validated": false,
+  "_conf_note": "V4 置信治理(2026-09-01)：validated=false 时 g(S) 视为未经验证占位，W_eff=50+(W-50)*shrink(0.5) 向基准50%收缩并标 confidence=LOW；真实 D1-D5 接入且 calibrate_winrate 验证 AUC>0.55 后，置 validated=true+shrink=1.0 解除收缩。落实 2026-08-16 校准报告§五.3：proxy 特征无预测力→下调胜率刻度信任、纪律重心转 EV三档+硬否决+分散。",
+  "win_map_mode": "convex",
+  "win_map_gamma": 1.5
+ },
+ "guards": {
+  "_source": "量化防错（防过拟合/未来函数/幸存者偏差/多重比较）",
+  "free_param_count": 9,
+  "min_samples_per_param": 10,
+  "sensitivity_perturb_pct": 20.0,
+  "sensitivity_flip_rate_fragile": 0.3,
+  "backtest_min_cost_bps": 3.0,
+  "backtest_min_periods": 12,
+  "multiple_testing_warn_trials": 5,
+  "forbidden_field_keywords": [
+   "行业均值",
+   "行业平均",
+   "加权平均",
+   "成分股平均",
+   "等权均值",
+   "板块均值",
+   "industry_avg",
+   "sector_avg"
+  ]
+ },
+ "p_star": {
+  "_source": "2026-09-08 风险调整买点 P*（与盈利面 p_star 公式同源、参数独立）。P*=[W·mid+(1−W)·bear_eff]/(1+r)；r=clamp(r_base(W)×s_vol,3%,60%)；s_vol=clamp(σ_eff/σ_ref,0.25,2.0)；σ_eff=σ_ann·√(H/12)。止损/摩擦走 bear_eff 不进 r（避免与 σ 重复计入风险）。σ 解析链：显式>序列派生>资产类别默认>缺(→s_vol=1.0 零回归)。胜率饱和默认 soft(softplus,k=0.02)，值域 [w_floor,w_cap]=[0.01,0.99]。P* 为只读字段，不参与仓位/回测。",
+  "enabled": true,
+  "r_bands": [
+   [
+    50.0,
+    0.1
+   ],
+   [
+    40.0,
+    0.15
+   ],
+   [
+    25.0,
+    0.25
+   ],
+   [
+    0.0,
+    0.4
+   ]
+  ],
+  "sigma_ref_ann": 0.3,
+  "s_vol_min": 0.25,
+  "s_vol_max": 2.0,
+  "r_min": 0.03,
+  "r_max": 0.6,
+  "horizon_ref_months": 12.0,
+  "asset_sigma_default": {
+   "etf": 0.18,
+   "broad": 0.15,
+   "sector": 0.28,
+   "theme": 0.32,
+   "commodity": 0.25,
+   "bond": 0.05,
+   "money": 0.01
+  },
+  "stop_loss": {
+   "enabled": true,
+   "default_stop_pct": 0.15,
+   "friction_pct": 0.01
+  },
+  "sat_mode": "soft",
+  "sat_k": 0.02,
+  "w_floor": 0.01,
+  "w_cap": 0.99,
+  "trading_days": 252.0,
+  "derive_min_points": 20
+ }
+}

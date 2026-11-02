@@ -1,0 +1,430 @@
+{
+  "_meta": {
+    "purpose": "坑→守卫闭环登记表（2026-10-25）。PITFALLS_SDS.md 里的 @preflight 只是注释，注释无法被验证，于是「写了标签=已闭环」属于自证。本表把闭环改成他证：每条坑必须映射到一个**真实存在且真的检查这个坑**的守卫，由 check_pitfall_closure.py 双向校验。",
+    "why_it_exists": "SDS 曾只有 PITFALLS_SDS.md（人读得懂、机器读不到），earnings 侧早有 registry+closure。缺这套机制的直接后果：新坑可以低成本地被声明闭环而没有任何东西会反驳它 —— 这是坑数看起来「只增不减」的结构性原因。",
+    "class_legend": {
+      "A_construction": "施工型：新写/首跑时的一次性缺陷，一旦有真实数据跑通即永久消失，不随使用复发。这类坑数量随功能数增长，但**不会重生**。",
+      "B_recurring": "复发型：只要不机械化就会无限重生（如「声明与实际不符」「假接线」「修入口不修存量」）。这类必须机械化，否则同一条会以新编号回来。",
+      "C_meta": "证明型元坑：不是产品缺陷，而是「验证本身不充分」（改完没跑全量 / 不知道影响面）。根治手段是影响面清单 + 强制全量回归，不是加业务规则。"
+    },
+    "rules": [
+      "R1 结构完整：id/title/class/symptom/root_cause/remedy/guard/blast_radius/status/date/fix_location 必填；class ∈ A_construction/B_recurring/C_meta",
+      "R2 守卫生效：preflight → check_id 必须 ∈ preflight_etf.REAL_CHECKS；injection → test 文件必须存在且文件内确实含 assertion 串；meta → check_id ∈ REAL_CHECKS",
+      "R3 复发型不许裸奔：class=B_recurring 必须有 preflight/injection/meta 守卫（none/doc 不算）",
+      "R4 防「指错检查项」（核心）：preflight 守卫必须给 proof，且 proof 必须出现在该 check 函数源码里",
+      "R5 垃圾桶闸：单个 check_id 承载 B 类坑 >3 条 → FAIL（粒度不足，无法逐条证明，应拆分）",
+      "R6 影响面配对：blast_radius=gate（数据写入/清洗闸门）必须给 stock_side（清存量落点）或 residual_ok（为何不需要）；code/fixture/verify 不适用（避免用代码契约级坑制造假阳性）",
+      "R7 双向一致：PITFALLS_SDS.md 的 S-xx 集合 == 本表 id 集合",
+      "R8 状态自洽：status=open 且 class ∈ A/B 且 guard.type=none → FAIL"
+    ],
+    "new_pitfall_sop": "撞坑 → ① 定 class（A/B/C）→ ② 在本表登记（含 guard + blast_radius）→ ③ 实现守卫（preflight 检查项 或 注入测试）→ ④ 跑 check_pitfall_closure.py → ⑤ 跑 run_all 六道",
+    "updated": "2026-10-25",
+    "blast_radius_legend": {
+      "gate": "数据写入/清洗闸门 —— 修了入口当天就必须回答「存量怎么办」，故 R6 强制 stock_side 或 residual_ok",
+      "code": "代码契约级（形参/签名/检查器/装配）—— 无存量数据概念，R6 不适用",
+      "fixture": "测试夹具",
+      "verify": "校验/统计/闸门自身的口径"
+    }
+  },
+  "pitfalls": [
+    {
+      "id": "S-01",
+      "title": "analyze_etf 不接受 --no-refresh",
+      "class": "A_construction",
+      "symptom": "analyze_etf 缺 --no-refresh 形参 → LLM 想复用草稿时被迫重跑刷新，耗时且可能改数。",
+      "root_cause": "CLI 参数契约未在编写时对齐 run_sector_pipeline 的产物语义。",
+      "remedy": "补参数并锁死契约；preflight 断言 analyze_etf.py 必含 --etf/--sector/--fills/--out。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "CLI 参数契约",
+        "proof": "--etf"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": "纯形参缺失，无存量数据受影响",
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_cli_contract"
+    },
+    {
+      "id": "S-02",
+      "title": "FILLS 含机械锁定字段 → 合并 exit 4",
+      "class": "A_construction",
+      "symptom": "LLM 把 _locked_mechanical 里的键写回 fills → 合并器判定 override → exit 4，整轮白跑。",
+      "root_cause": "草稿超集与 fills 子集的边界未在模板层隔离。",
+      "remedy": "fills 模板自动剔除锁定字段；preflight 扫 runs/*/fills_*.json 与 LOCKED_FIELDS 求交，命中即 MUST。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "FILLS 字段冲突",
+        "proof": "LOCKED_FIELDS"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": "历史 fills 已在 preflight 全量扫描范围内（无 codes 时扫全部）",
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_fills"
+    },
+    {
+      "id": "S-03",
+      "title": "managed python 无 pandas → 刷新器静默失效",
+      "class": "A_construction",
+      "symptom": "刷新脚本 import pandas 失败，被 except 吞掉 → 缓存不更新且不报错。",
+      "root_cause": "依赖假设未验证，异常被宽泛捕获。",
+      "remedy": "全部去 pandas（纯 csv/json）；preflight 检查依赖可用性。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "依赖 pandas",
+        "proof": "pandas"
+      },
+      "blast_radius": "verify",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed_structural",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_deps（代码已无 pandas 依赖）"
+    },
+    {
+      "id": "S-04",
+      "title": "fetch_one() 无 metric 形参 → PE 路径从未跑通",
+      "class": "A_construction",
+      "symptom": "main() 以 metric= 调用但函数未声明该形参 → TypeError，PE 全路径 100% 崩溃，缓存长期 stale 无法自愈。",
+      "root_cause": "改签名时只改了调用方，未跑过该分支（=假接线的一种）。",
+      "remedy": "补齐 metric 形参；preflight 断言 fetch_one 签名含 metric。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "fetch_one 签名",
+        "proof": "metric"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_fetcher_signature"
+    },
+    {
+      "id": "S-05",
+      "title": "缓存 as_of 虚报新鲜",
+      "class": "B_recurring",
+      "symptom": "缓存 as_of 写「今天」但末根 K 线停在两周前 → 新鲜度门失效，stale 数据当新数据用。",
+      "root_cause": "把「抓取时间」当成「数据时间」。二者是不同事实，却共用同一字段。",
+      "remedy": "as_of 必须取自末根数据点日期；preflight 比对 as_of 与末根日期。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "缓存诚实性",
+        "proof": "as_of"
+      },
+      "blast_radius": "gate",
+      "stock_side": "repair_nontrading.py（重算 as_of/分位）",
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_cache_honesty"
+    },
+    {
+      "id": "S-06",
+      "title": "_pipeline_meta 无 warnings 键 → 失败不可见",
+      "class": "A_construction",
+      "symptom": "管线内部有 warnings 但未落盘 → 上层只能看到 exit 0，看不到部分失败。",
+      "root_cause": "落盘 schema 与内存状态不同步。",
+      "remedy": "_pipeline_meta 恒带 warnings；preflight 断言该契约。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "warnings 落盘契约",
+        "proof": "warnings"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_meta_warnings_contract"
+    },
+    {
+      "id": "S-07",
+      "title": "变量作用域 NameError 崩在写盘后 → 污染缓存",
+      "class": "A_construction",
+      "symptom": "崩溃点位于写完文件之后 → 半成品落盘，下次读取当成完整数据。",
+      "root_cause": "写盘先于全部计算完成；无静态检查兜住未定义变量。",
+      "remedy": "先算后写；pyflakes 静态拦截 F821。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "静态 lint",
+        "proof": "pyflakes"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_lint_optional"
+    },
+    {
+      "id": "S-08",
+      "title": "脚本硬编码旧结论",
+      "class": "B_recurring",
+      "symptom": "脚本里直接写死「该行业供过于求」等结论文本 → 数据全变结论不变。",
+      "root_cause": "把 LLM 的结论沉淀进了代码（而非由数据重算）。",
+      "remedy": "preflight 扫硬编码结论词表，命中即拦。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "硬编码结论扫描",
+        "proof": "HARDCODE"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_hardcode"
+    },
+    {
+      "id": "S-09",
+      "title": "SKILL.md 统计块不一致 → 发布闸红",
+      "class": "B_recurring",
+      "symptom": "新增文件/用例后 SKILL 统计块仍写旧数字 → 发布闸 exit 3。",
+      "root_cause": "计数类事实靠手写维护，必然漂移。",
+      "remedy": "计数一律由 make_stats.py 生成；preflight --check 比对。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "SKILL 统计块",
+        "proof": "make_stats"
+      },
+      "blast_radius": "verify",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-07",
+      "fix_location": "preflight_etf.py::check_release_stats"
+    },
+    {
+      "id": "S-10",
+      "title": "财报已披露但 PB/PE 序列仍停在该期披露截止日之前 → 分位系统性失真",
+      "class": "B_recurring",
+      "symptom": "每季财报后，估值序列若未推进到新报告期，5 年分位整体偏斜。",
+      "root_cause": "新鲜度门只看日期差，未把「财报周期」这一维度纳入判定。",
+      "remedy": "增加财报周期闸：报告期落后于已披露期 → 拦。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "财报周期闸",
+        "proof": "报告期"
+      },
+      "blast_radius": "gate",
+      "stock_side": "重新抓取把序列推进到已披露报告期（preflight 已把『序列落后已披露期』做成 MUST，不会静默通过）",
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-24",
+      "fix_location": "preflight_etf.py::check_report_cycle"
+    },
+    {
+      "id": "S-11",
+      "title": "SDS 的 iFinD 路径有三类、护栏只覆盖一类",
+      "class": "B_recurring",
+      "symptom": "预算闸只守在一条路径上，另两条照样烧配额。",
+      "root_cause": "「N 条路径只护 1 条」——新增调用点时不会自动继承护栏。",
+      "remedy": "预算闸下沉到唯一记账函数 _ifind_call；preflight 校验全部调用点。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "iFinD 预算闸",
+        "proof": "ifind_budget"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "preflight_etf.py::check_ifind_budget"
+    },
+    {
+      "id": "S-12",
+      "title": "quant_raw 机械装配静默断链（ETF 月频缓存覆盖缺口 54/55）",
+      "class": "B_recurring",
+      "symptom": "quant_raw 只装到极少字段且不报错 → 量化路径静默降级为 table。",
+      "root_cause": "装配函数在覆盖不足时静默返回部分字段，调用方无法区分「少」与「缺」。",
+      "remedy": "preflight 做装配匹配：quant_inputs 声明的字段必须与装配实现一一对应。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "quant_raw 装配匹配",
+        "proof": "quant_raw"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "preflight_etf.py::check_quant_raw_assembly"
+    },
+    {
+      "id": "S-13",
+      "title": "健康度把「历史口径突变」判成 INVALID → 误杀当前主锚",
+      "class": "A_construction",
+      "symptom": "D-4 在 10 年月频上扫出的 2014-12 口径突变，被 D-8 无条件投射到近 5 年主锚 → 整票判不可用。",
+      "root_cause": "跨窗口告警按「存在性」而非「窗口相关性」分级。",
+      "remedy": "caliber_events + _months_ago() 按 60 个月切分：窗口内 INVALID / 全在窗外 DEGRADED / 仅 bool 无明细 INVALID(fail-closed)。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_d7_d8_20261025.py",
+        "assertion": "caliber_events"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "data_health.py::assess（含窗口内/窗外双判例）"
+    },
+    {
+      "id": "S-14",
+      "title": "现价双源分歧不得用第二源「静默改值」",
+      "class": "B_recurring",
+      "symptom": "两源不一致时若取均值/取第二源，会把 EV base 平移且不留痕。",
+      "root_cause": "把「交叉校验」误当「投票融合」。校验的产出是告警与置信折扣，不是新数值。",
+      "remedy": "分歧 >0.5% 保留主源 + warn 落 warnings + 草稿 _price_cross_check；第二源只用于证伪与兜底。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_d7_d8_20261025.py",
+        "assertion": "T2b"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "run_sector_pipeline.py::fetch_price_now"
+    },
+    {
+      "id": "S-15",
+      "title": "欠账登记表若无闸门，必然腐烂成第二个「文档里躺着的待定」",
+      "class": "B_recurring",
+      "symptom": "V11/V13 在审议文档里躺了两个月，每轮都要重新推演；同类欠账散落 CHANGELOG 叙事段，人读得懂机器读不到。",
+      "root_cause": "欠账只有叙事载体没有结构载体；且新建的表若无校验，同样会腐烂（ID 重复/状态写「等有空」/依赖指向已删条目）。",
+      "remedy": "BACKLOG.md 七列固定表 + check_backlog.py 机械校验（ID 唯一连续/枚举/定义≥20字/依赖存在且不自依赖），挂 selfcheck_all 与 preflight。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "健康度与欠账闸",
+        "proof": "check_backlog"
+      },
+      "blast_radius": "verify",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "preflight_etf.py::check_health_backlog + check_backlog.py"
+    },
+    {
+      "id": "S-16",
+      "title": "连接器「偶发空响应」被当成数据缺失 → 整批静默不处理",
+      "class": "B_recurring",
+      "symptom": "妙想直连偶发返回 None → 原代码 r.get() 抛 AttributeError 崩掉整个刷新循环，12 只只落 10 只，另 2 只既没成功也没失败记录。",
+      "root_cause": "把「连接器状态」与「数据覆盖」混成一个信号；二者处置不同（重试/换源 vs 如实 SKIP）。",
+      "remedy": "fetch_one 改 per-code 失败返回 + 一次 2s 重试；preflight 把源 up/down 变成运行前可见（≥3/5 开跑，down 只 WARN）。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_s16_batch_resilience_20261025.py",
+        "assertion": "BATCH_SURVIVES"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "fetch_pb_mxdata.py::fetch_one（附 per-code 失败注入测试）"
+    },
+    {
+      "id": "S-17",
+      "title": "交易日历跨市场套用 → 删掉别的市场的真实交易日",
+      "class": "A_construction",
+      "symptom": "用 A 股日历清洗全部缓存，会把 HSTECH/SPX 的 88 个点当污染删掉 = 制造数据缺口（比脏数据更严重：缺口不报错）。",
+      "root_cause": "把「交易日」当全局常量，实际是分市场的（A 股 1213 日 / 港股 1301 日）。",
+      "remedy": "trade_calendar 按 cn/hk/us 各自建历；某市场样本 <3 序列 → available=False → 不判休市（保留 + WARN）。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_b03_trade_day_20261025.py",
+        "assertion": "市场隔离"
+      },
+      "blast_radius": "code",
+      "stock_side": null,
+      "residual_ok": "清污前先按代码后缀分组审计，发现跨境三只多出的 88 点属市场差异，随即改为分市场建历 → 未发生跨市场删除，无存量损失",
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "trade_calendar.py（分市场 + 样本不足时拒绝判定）"
+    },
+    {
+      "id": "S-18",
+      "title": "「闸门修好 ≠ 数据干净」：存量污染必须单独清",
+      "class": "B_recurring",
+      "symptom": "三个落盘口接上过滤后新数据干净，但已有缓存躺着 575 个非交易日点，pct_now 最大偏 2.3pp，足以改五档归属。",
+      "root_cause": "闸门只作用于「写入」，历史文件不走这条路径。修了入口 ≠ 修了数据。",
+      "remedy": "repair_nontrading.py 清存量（dry-run 默认/逐文件备份/build_record 单一实现/删除比>20% 拒绝）；preflight 把「存量非交易日点必须为 0」做成 MUST。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "健康度与欠账闸",
+        "proof": "repair_nontrading"
+      },
+      "blast_radius": "gate",
+      "stock_side": "repair_nontrading.py（12 文件已清污，复核归 0）",
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "repair_nontrading.py + preflight_etf.py::check_health_backlog(③)"
+    },
+    {
+      "id": "S-19",
+      "title": "新闸门打废静态夹具 → 先改夹具，不许放宽闸门",
+      "class": "C_meta",
+      "symptom": "加「周末 fail-closed」后 3 处手写日历日夹具（2026-01-02/03/04、2099-01-04）被拦，自检报 MergeError，看似「闸门坏了」。",
+      "root_cause": "夹具用手写日历日而非交易日；新闸门与旧断言共用路径 → 触碰新约束时表现成回归失败。缺「改完先跑全量并判断闸门对还是夹具错」的强制动作。",
+      "remedy": "只改夹具（换 2026-01-05/06/07、2099-01-05/06）；补「周末入参必 MergeError」注入用例，防修夹具时把闸门一起修松。通则：加任何 fail-closed 闸门后，MergeError/AssertionError 一律默认假设闸门对。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_b03_trade_day_20261025.py",
+        "assertion": "周末"
+      },
+      "blast_radius": "fixture",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "merge_valuation_gap._selfcheck + _test_merge_regress（夹具重造 + 新闸门注入用例）"
+    },
+    {
+      "id": "S-20",
+      "title": "「闭环靠自证」：@preflight 只是注释，写上去就算治理了",
+      "class": "B_recurring",
+      "symptom": "6 条性质完全不同的坑共用同一个检查项标签；其中一个标签还自带「未安装时降级为提示」的豁免。preflight 全 OK，但没有任何东西验证过这些检查项真的能拦住对应的坑。",
+      "root_cause": "守卫只有「叙事载体」（md 注释）没有「可反驳载体」；闭环是自证的，所以新坑可以被低成本声明关掉。earnings 侧早有 registry+closure，SDS 侧一直缺。",
+      "remedy": "PITFALLS_REGISTRY.json + check_pitfall_closure.py R1~R8（R4 proof 必须在该 check 源码里 / R5 垃圾桶闸 / R6 数据闸门回答存量）；md 增 @test 标签；闭环校验自身作为 preflight「坑登记闭环」硬闸。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "坑登记闭环",
+        "proof": "check_pitfall_closure"
+      },
+      "blast_radius": "verify",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "PITFALLS_REGISTRY.json + check_pitfall_closure.py + preflight_etf.check_pitfall_closure_gate"
+    },
+    {
+      "id": "S-21",
+      "title": "渲染层把 null 打成「None」→ 把「没算」显示成「算出来是 0」",
+      "class": "B_recurring",
+      "symptom": "p_star=null 时卡片显示「W=None% · r=None%（ρ σ=None）」「P* None」「安全边际 None%」；win_rate=None 被 int(round(None)) 兜成 0 → EV 标题写「W=0%」，左侧等待布局被渲染成胜率为零。引擎侧 discipline.py:1305 把 win is None 与 win<=0 合并同一条 disclosure，致 status=OK 的 159040 卡片写着「框架否决」。",
+      "root_cause": "空值被当作「没有信息」直接 f-string 进 HTML；而空值实际携带一条必须显示的信息——为什么没有。与 D-8「降级必量化」、㊸ 口径防线同构：渲染层是最后一道，最容易把上游的诚实标注抹平。",
+      "remedy": "① 渲染层三态兜底：p_star 缺失按 status / left_side_channel 分述原因（框架否决 / 左侧通道不适用 / 缺输入），轴标签与现价回落 odds.now 或显示「—」，胜率环无数值显示「—」并带口径标签；② EV 空档必须显示引擎 disclosure，禁静默空白；③ 引擎 disclosure 拆分 win is None 与 win<=0 两条文案（159040 已重跑落盘）。",
+      "guard": {
+        "type": "injection",
+        "test": "_test_card_null_20261025.py",
+        "assertion": "G1~G5"
+      },
+      "blast_radius": "verify",
+      "stock_side": null,
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-10-25",
+      "fix_location": "render_verdict_card.py（ps_na 三态 + ps_price 回落 + win_txt/tail_down_txt 兜底 + EV disclosure 显示）；discipline.py:1304-1310（disclosure 拆分）"
+    }
+  ]
+}
