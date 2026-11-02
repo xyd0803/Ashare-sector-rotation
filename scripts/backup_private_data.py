@@ -116,11 +116,15 @@ def copy_tree(src, dst, dry_run):
 
 
 def sync_code(root, dst, dry_run):
-    """Copy every file tracked on the current branch into the backup worktree.
+    """Copy every tracked file from the working tree into the backup worktree.
 
-    Without this, the backup branch would freeze the code as it looked when the
-    branch was first created -- a restore would bring back month-old logic. It
-    also keeps the commit hook in the worktree current.
+    This copies the *working-tree* version, not the committed one, so edits you
+    have not committed yet are protected too -- the point of a backup is the disk,
+    not the index.
+
+    It also keeps the commit hook in the worktree current; otherwise the backup
+    branch would keep validating commits with whatever the guard looked like when
+    the branch was first created.
     """
     proc = git(["ls-files", "-z"], cwd=root)
     paths = [p for p in proc.stdout.split("\0") if p.strip()]
