@@ -33,8 +33,9 @@ cookie*.txt
 # data/raw        来自妙想 / 东财
 # data/index_daily_pb、index_daily_pe  来自东财 / 同花顺 / 国证
 # 这些数据的分发权不在本项目，公开仓库不得再分发（见 docs/DATA_SOURCES.md）。
-# 另：data/ 下 4 个 .py（stage1_build / fetch_index / probe_mx / test_fetch）
-# 写死了本机绝对路径与项目 UUID，按「个人路径不入仓」同样排除。
+# data/ 下另有 4 个早期临时脚本（stage1_build / fetch_index / probe_mx /
+# test_fetch），写死了本机绝对路径与项目 UUID，按「个人路径不入仓」排除。
+# 其治理后的正式版本在 scripts/data_prep/，已入库，两者不要混淆。
 # ============================================================
 data/
 
