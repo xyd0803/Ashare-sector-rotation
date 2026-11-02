@@ -1,0 +1,5 @@
+{
+  "fingerprint": "d390ff5100cd6d741ff394a40c1f38da6ca3ba3cb51fa69f32f1699918d255db",
+  "params_version": "1.11.0",
+  "note": "参数冻结锁。改 params.json 后须 bump version 并重新生成本文件。"
+}

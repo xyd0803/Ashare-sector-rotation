@@ -1,0 +1,227 @@
+[
+ {
+  "sector": "中证酒(399987)",
+  "as_of": "2026-08-15",
+  "today": "2026-08-15",
+  "asset_class": "sector",
+  "index_code": "399987.SZ",
+  "index_name": "中证酒",
+  "demand": "cyclical",
+  "erosion_signals": 0,
+  "terminal_price_down": false,
+  "volume": "down",
+  "price": "up",
+  "forward": "up",
+  "bottom_signals": 4,
+  "prev_vp": "down|down",
+  "vp_basis": "industry_cycle",
+  "industry_volume_metric": "白酒产量/渠道动销(2026 淡季动销平淡·酒类CPI同比-3%·Q2加速出清去库)",
+  "industry_price_metric": "飞天茅台批价(1695-1700元企稳)及五粮液批价(730→800元回升)·茅台一个月三次提价(1499→1639→1753)",
+  "industry_volume_trend": "down",
+  "industry_price_trend": "up",
+  "valuation_anchor": "BLEND",
+  "pb_now": 4.0,
+  "pb_manual": 4.0093,
+  "pb_sources": {
+   "ifind": 4.0093,
+   "ht_api_2026-08": 4.0
+  },
+  "pb_field_label": "",
+  "pb_pct": 5.9,
+  "pb_pct_period": "5y",
+  "pb_pct_10y": 8.0,
+  "pb_series_years": 5.0,
+  "pb_series_freq": "daily",
+  "pb_p5": 3.8,
+  "pb_p20": 4.73,
+  "pb_p50": 6.3,
+  "pb_p80": 8.59,
+  "pb_p95": 10.1,
+  "pe_now": 19.95,
+  "pe_manual": 19.86,
+  "pe_sources": {
+   "ifind": 19.95,
+   "ht_api_2026-08": 19.86
+  },
+  "pe_field_label": "",
+  "pe_pct": 7.0,
+  "pe_pct_period": "5y",
+  "pe_pct_10y": 9.0,
+  "pe_series_years": 5.0,
+  "pe_series_freq": "monthly",
+  "pe_p5": 19.49,
+  "pe_p20": 20.37,
+  "pe_p50": 27.61,
+  "pe_p80": 41.41,
+  "pe_p95": 45.49,
+  "imagination": "B",
+  "crowding": false,
+  "catalyst": true,
+  "catalysts": [
+   "茅台一个月三次提价+五粮液批价800元(供给收缩挺价)",
+   "中秋国庆旺季备货窗口临近",
+   "高盛:白酒最困难阶段已过·行业筑底"
+  ],
+  "is_cross_border": false,
+  "notes": "估值主锚=BLEND(白酒:品牌资产+稳定盈利, PE/PB均重要)。PB用ifind/华泰双源4.00(mx日频3.725口径偏旧弃用); PE用ifind 19.95。",
+  "vp_basis_note": "量价=行业供需周期: 量=白酒产量/动销(淡季平淡·去库), 价=茅五批价(企稳回升)。严禁用ETF换手率/指数点位。",
+  "forward_evidence": [
+   {
+    "type": "policy",
+    "desc": "茅台一个月三次提价(1499→1639→1753)+五粮液批价730→800元回升，酒企供给收缩挺价",
+    "source": "行业批价跟踪（本case价口径）"
+   },
+   {
+    "type": "other",
+    "desc": "高盛：白酒最困难阶段已过·行业筑底",
+    "source": "高盛行业观点(本case催化)"
+   }
+  ]
+ },
+ {
+  "sector": "沪深300非银(H30035)",
+  "as_of": "2026-08-15",
+  "today": "2026-08-15",
+  "asset_class": "sector",
+  "index_code": "H30035.CSI",
+  "index_name": "300非银",
+  "demand": "cyclical",
+  "erosion_signals": 0,
+  "terminal_price_down": false,
+  "volume": "down",
+  "price": "up",
+  "forward": "up",
+  "bottom_signals": 3,
+  "prev_vp": "up|up",
+  "vp_basis": "industry_cycle",
+  "industry_volume_metric": "A股日均股基成交额(2026-08 2.95万亿·环比-9.3%·同比+8%)及两融余额(2.64万亿·同比+31%)",
+  "industry_price_metric": "券商ROE/佣金率(26H1上市券商净利+58~66%·Q2单季+99~115%·ROE回升至7.5-8.8%)",
+  "industry_volume_trend": "down",
+  "industry_price_trend": "up",
+  "valuation_anchor": "PB",
+  "pb_now": 1.2427,
+  "pb_manual": 1.24,
+  "pb_sources": {
+   "ifind": 1.2427,
+   "ht_api_2026-08": 1.24
+  },
+  "pb_field_label": "",
+  "pb_pct": 28.9,
+  "pb_pct_period": "5y",
+  "pb_pct_10y": 15.0,
+  "pb_series_years": 5.0,
+  "pb_series_freq": "daily",
+  "pb_p5": 1.111,
+  "pb_p20": 1.196,
+  "pb_p50": 1.331,
+  "pb_p80": 1.505,
+  "pb_p95": 1.585,
+  "imagination": "B",
+  "crowding": false,
+  "catalyst": true,
+  "catalysts": [
+   "26H1上市券商净利+58~66%(25家预增)·Q2单季+99~115%",
+   "券商回购潮(6家合计12亿)+国资增持",
+   "沪深港合作深化+流动性新规"
+  ],
+  "is_cross_border": false,
+  "notes": "估值主锚=PB(证券:净资产驱动·盈利周期波动大)。PB双源一致(ifind 1.2427/华泰1.24)。PE 9.1仅辅助。",
+  "vp_basis_note": "量价=行业供需周期: 量=A股日均成交额/两融(行业需求体量), 价=券商ROE/佣金率(行业盈利价格)。严禁用ETF换手率/指数点位。",
+  "forward_evidence": [
+   {
+    "type": "orders",
+    "desc": "A股日均股基成交额2.95万亿同比+8%·两融余额2.64万亿同比+31%，市场活跃度前瞻抬升",
+    "source": "交易所/东财行情统计 2026-08"
+   },
+   {
+    "type": "consensus_revision",
+    "desc": "26H1上市券商净利预增58~66%（25家）·Q2单季+99~115%",
+    "source": "上市券商业绩预告"
+   }
+  ]
+ },
+ {
+  "sector": "动漫游戏(930901)",
+  "as_of": "2026-08-15",
+  "today": "2026-08-15",
+  "asset_class": "sector",
+  "index_code": "930901.CSI",
+  "index_name": "动漫游戏",
+  "demand": "growth",
+  "erosion_signals": 0,
+  "terminal_price_down": false,
+  "volume": "up",
+  "price": "up",
+  "forward": "up",
+  "bottom_signals": 0,
+  "prev_vp": "up|up",
+  "vp_basis": "industry_cycle",
+  "industry_volume_metric": "国内游戏市场收入(2026H1 1884.5亿·+12.2%)及版号发放(2026-07 197款·月均130-180常态化)",
+  "industry_price_metric": "游戏ARPU/流水货币化(腾讯Q2游戏收入+11%·本土+17%·头部A股中报兑现:世纪华通+62~80%/巨人+157~183%)",
+  "industry_volume_trend": "up",
+  "industry_price_trend": "up",
+  "valuation_anchor": "PE",
+  "pb_now": 3.2045,
+  "pb_manual": 3.2,
+  "pb_sources": {
+   "ifind": 3.2045,
+   "ht_api_2026-08": 3.2
+  },
+  "pb_field_label": "",
+  "pb_pct": 69.0,
+  "pb_pct_period": "5y",
+  "pb_pct_10y": 60.0,
+  "pb_series_years": 5.0,
+  "pb_series_freq": "daily",
+  "pb_p5": 1.926,
+  "pb_p20": 2.164,
+  "pb_p50": 2.773,
+  "pb_p80": 3.604,
+  "pb_p95": 4.164,
+  "pe_now": 25.3,
+  "pe_manual": 25.3,
+  "pe_sources": {
+   "ifind": 25.3,
+   "ht_api_2026-08": 25.3
+  },
+  "pe_field_label": "",
+  "pe_pct": 2.0,
+  "pe_pct_period": "5y",
+  "pe_pct_10y": 5.0,
+  "pe_series_years": 5.0,
+  "pe_series_freq": "monthly",
+  "pe_p5": 26.54,
+  "pe_p20": 28.22,
+  "pe_p50": 37.26,
+  "pe_p80": 62.68,
+  "pe_p95": 80.0,
+  "imagination": "A",
+  "crowding": false,
+  "catalyst": true,
+  "catalysts": [
+   "腾讯Q2游戏+11%·本土+17%(三角洲/无畏契约DAU新高)",
+   "版号常态化(7月197款)+AI赋能降本",
+   "中报业绩兑现(世纪华通+62~80%/巨人+157~183%)·出海+30%"
+  ],
+  "is_cross_border": false,
+  "notes": "估值主锚=PE(游戏:轻资产内容·盈利随产品周期高增)。PE now=25.3(ifind)处5年极低位(分位~2%)。PE P95=80为估算(原始序列含盈利转负异常值1066·已剔除)。",
+  "vp_basis_note": "量价=行业供需周期: 量=游戏市场规模/版号发放, 价=ARPU/流水货币化。严禁用ETF换手率/指数点位。",
+  "forward_evidence": [
+   {
+    "type": "policy",
+    "desc": "版号发放常态化（2026-07 197款·月均130-180）",
+    "source": "国家新闻出版署"
+   },
+   {
+    "type": "orders",
+    "desc": "国内游戏市场收入2026H1 1884.5亿同比+12.2%",
+    "source": "游戏工委产业报告"
+   },
+   {
+    "type": "consensus_revision",
+    "desc": "中报兑现：世纪华通+62~80%/巨人+157~183%；腾讯Q2游戏本土+17%",
+    "source": "公司中报/腾讯财报"
+   }
+  ]
+ }
+]
