@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is in the matrix because the project was developed there and
+        # the failure modes that matter (path separators, console encoding,
+        # file locking) are exactly the ones a Linux-only CI hides.
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run test suite
+        # Covers the seven red-team suites plus the offline-demo smoke test.
+        # No credentials are configured here on purpose: if any test ever starts
+        # requiring a key, CI must fail rather than silently skip.
+        run: python -m pytest -q
+
+      - name: Publication guard
+        # The commit hook is local and bypassable; this is the backstop.
+        run: python scripts/check_no_secrets.py --quiet
+
+  demo:
+    name: clean-clone demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime dependencies only
+        run: pip install -r requirements.txt
+
+      - name: Assert no data directory exists
+        # The README claims the demo needs no data. Verify the claim, because a
+        # demo that quietly depends on a fixture is the usual way this breaks.
+        run: test ! -d data
+
+      - name: Run the offline demo
+        run: python discipline.py --demo
