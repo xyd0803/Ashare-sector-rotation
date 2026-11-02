@@ -36,7 +36,7 @@
 不需要 API Key、不需要联网、不需要数据目录。只依赖 `requests`。
 
 ```bash
-git clone https://github.com/xyd0803/Ashare-sector-rotation.git
+git clone https://github.com/<your-account>/xyd-supply-demand-sector.git
 cd xyd-supply-demand-sector
 pip install -r requirements.txt
 python discipline.py --demo

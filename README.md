@@ -41,7 +41,7 @@ Three consequences show up everywhere in the code:
 No API key. No network. No data directory. Requires only `requests`.
 
 ```bash
-git clone https://github.com/<you>/xyd-supply-demand-sector.git
+git clone https://github.com/<your-account>/xyd-supply-demand-sector.git
 cd xyd-supply-demand-sector
 pip install -r requirements.txt
 python discipline.py --demo

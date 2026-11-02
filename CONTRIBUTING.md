@@ -8,12 +8,19 @@ quietly.** Most of the rules below exist to keep a change visible.
 
 ```bash
 pip install -r requirements-dev.txt
+git config core.hooksPath .githooks   # once: commit + push guards
 python discipline.py --demo        # must run offline, no key
 python -m pytest -q                # must be green before and after your change
+python scripts/check_public_ready.py --quiet   # full history, not just your diff
 ```
 
 If `pytest` is green before your change and red after, the change is the problem —
 not the test. Several of these tests encode a bug that already happened once.
+
+The last command checks the **entire history**, which is not redundant with the
+commit hook: a key added in one commit and removed in the next passes every
+working-tree check while remaining readable via `git log -p`. See
+[`docs/PUBLISHING.md`](docs/PUBLISHING.md) for what the gate refuses and why.
 
 ## What a change must not break
 
