@@ -1,0 +1,25 @@
+#!/bin/sh
+# 提交前敏感信息自检（fail-closed：拦不住就阻断提交）
+# 启用方式（在仓库根目录执行一次）：
+#     git config core.hooksPath .githooks
+# 说明：本仓库的凭证只允许通过环境变量注入，任何进入 git 历史的密钥都视为永久泄露。
+PY=""
+for cand in python python3 py; do
+    if command -v "$cand" >/dev/null 2>&1; then
+        PY="$cand"
+        break
+    fi
+done
+
+if [ -z "$PY" ]; then
+    echo "[hook] 找不到 python 解释器，无法执行敏感信息自检 —— 按 fail-closed 规则阻断提交。" >&2
+    echo "[hook] 请把 python 加入 PATH，或用 git commit --no-verify 自行承担风险。" >&2
+    exit 1
+fi
+
+"$PY" scripts/check_no_secrets.py --staged || {
+    echo "" >&2
+    echo "[hook] 提交被拦截：请按上面提示处理后重试。" >&2
+    echo "[hook] 确认无误要强行提交：git commit --no-verify（不建议）" >&2
+    exit 1
+}

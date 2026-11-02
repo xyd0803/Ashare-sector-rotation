@@ -1,0 +1,24 @@
+# 统一换行符，避免 Windows 开发 / Linux CI 之间的 CRLF 差异
+# （Windows 下 core.autocrlf=true 会把工作区改成 CRLF，若不约束，Linux 上
+#   的 shell 钩子与 Python 脚本可能出现 /usr/bin/env: 'sh\r': No such file）
+* text=auto eol=lf
+
+*.py     text eol=lf
+*.sh     text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf
+*.toml   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.cmd    text eol=crlf
+*.bat    text eol=crlf
+
+# 二进制，不做换行转换
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.xls    binary
+*.xlsx   binary
+*.pdf    binary
+*.zip    binary

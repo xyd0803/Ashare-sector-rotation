@@ -1,0 +1,6 @@
+# 运行时依赖
+# 实测：核心引擎与 discipline.py --demo 仅需 requests，无需 pandas / talib / GPU / API Key。
+requests>=2.31
+
+# 可选：仅 run_sector_pipeline.py / preflight_etf.py 需要
+# pandas>=2.0
