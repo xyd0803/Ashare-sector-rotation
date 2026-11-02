@@ -67,3 +67,29 @@ jobs:
 
       - name: Run the offline demo
         run: python discipline.py --demo
+
+  publish-gate:
+    name: publish gate (full history)
+    runs-on: ubuntu-latest
+    # Only on push: a contributor's commit email is not ours to police, and
+    # failing their PR over it would be noise rather than signal.
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The gate inspects every commit. A shallow clone would hide the old
+          # ones and report "clean" for a history that is not -- the most
+          # dangerous failure mode this job could have.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime dependencies only
+        run: pip install -r requirements.txt
+
+      - name: Assert the history is safe to publish
+        # Identity, credentials, personal paths, forbidden directories, blob size,
+        # and the offline demo. See docs/PUBLISHING.md for what each one means.
+        run: python scripts/check_public_ready.py --quiet
