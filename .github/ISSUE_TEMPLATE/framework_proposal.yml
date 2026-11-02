@@ -1,0 +1,65 @@
+name: Framework proposal
+description: A gap in the reasoning — missing gate, wrong anchor, unhandled failure mode
+labels: ["framework"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project treats framework changes as the primary kind of change.
+        A proposal is judged by whether it makes a **failure mode visible**, not
+        by whether it raises a score.
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Which stage of the verdict does this concern?
+      options:
+        - Inputs (supply/demand read, valuation percentile)
+        - A gate (industry cycle / dual-source / final)
+        - Data health assessment
+        - Win-rate layer
+        - Valuation anchor selection
+        - EV block or P* derivation
+        - Position sizing and caps
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure-mode
+    attributes:
+      label: What can go wrong today
+      description: |
+        Describe a concrete case where the current framework produces a defensible-looking
+        answer that is actually wrong. Concrete beats general — a real instrument and a
+        real number is ideal, a hypothetical is acceptable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should change
+      description: |
+        Which state should the new check return, and what should the verdict do about it?
+        Remember that a gate returning `MISSING` blocks the verdict entirely.
+    validations:
+      required: true
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: Where would this fire incorrectly?
+      description: |
+        Every proposal in this repo is expected to answer this. A guard that over-fires
+        gets switched off by its users, which leaves them worse off than no guard.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Please confirm
+      options:
+        - label: This is about the framework's reasoning, not a request for market predictions or buy/sell signals.
+          required: true

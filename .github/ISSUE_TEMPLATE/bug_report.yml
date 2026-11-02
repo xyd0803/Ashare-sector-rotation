@@ -1,0 +1,77 @@
+name: Bug report
+description: A verdict, gate, or data-state result looks wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A verdict cannot be reproduced without its parameter fingerprint, so the
+        first two fields matter more than they look.
+
+  - type: input
+    id: fingerprint
+    attributes:
+      label: Parameter fingerprint
+      description: The `params=` value printed on the verdict line.
+      placeholder: "params=1.11.0#d390ff51"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The exact output, ideally from `--json`, trimmed to the relevant block.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: |
+        If you can point at the specific line of the framework you disagree with,
+        that is more useful than the number you expected. Where exactly does the
+        reasoning go wrong — the input, a gate, an anchor, the EV block, or the cap?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data-state
+    attributes:
+      label: Data state reported by the engine
+      options:
+        - OK
+        - DEGRADED
+        - MISSING
+        - INVALID
+        - "Not shown in my output"
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: "python discipline.py --input foo.json"
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and OS
+      placeholder: "3.13.0 / Windows 11"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Please confirm
+      options:
+        - label: I ran `python -m pytest -q` and it is green (so the bug is not a known failing guard).
+          required: false
+        - label: This report contains no API keys, account numbers, or personal file paths.
+          required: true
