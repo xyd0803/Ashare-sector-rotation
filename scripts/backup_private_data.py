@@ -181,14 +181,14 @@ def main(argv=None):
         return 0
 
     # -- prepare the worktree ------------------------------------------------
-    # Drop stale registrations first: a worktree whose directory was deleted
-    # manually still shows up in `git worktree list` and blocks re-creation.
-    git(["worktree", "prune"], cwd=root)
+    # A worktree whose directory disappeared stays registered and blocks
+    # re-creation. `prune` alone keeps recent entries (gc.worktreePruneExpire),
+    # so expire it immediately and drop any stale registration for our path.
+    git(["worktree", "prune", "--expire", "now"], cwd=root, check=False)
+    git(["worktree", "remove", "--force", wt], cwd=root, check=False)
     if branch_exists(root, args.branch):
-        if os.path.isdir(wt):
-            print("[backup] reusing worktree on %s" % args.branch)
-        else:
-            git(["worktree", "add", wt, args.branch], cwd=root)
+        print("[backup] reusing branch %s" % args.branch)
+        git(["worktree", "add", wt, args.branch], cwd=root)
     else:
         if os.path.isdir(wt):
             shutil.rmtree(wt)
