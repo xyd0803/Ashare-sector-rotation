@@ -19,17 +19,23 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# 子进程输出强制 UTF-8：demo 会打印中文，Windows 英文版 runner 的控制台默认
+# cp1252，直接 print 会抛 UnicodeEncodeError，变成与被测逻辑无关的假红。
+_UTF8 = {"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+
 
 def _run(*args, timeout=180):
     return subprocess.run(
         [sys.executable, *args], cwd=ROOT, capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=timeout,
+        env={**os.environ, **_UTF8},
     )
 
 
 def test_demo_runs_offline_without_credentials():
     """The demo must not need a key, a network call, or the data directory."""
     env = {k: v for k, v in os.environ.items() if not k.endswith("_APIKEY")}
+    env.update(_UTF8)
     proc = subprocess.run(
         [sys.executable, "discipline.py", "--demo"], cwd=ROOT, capture_output=True,
         text=True, encoding="utf-8", errors="replace", timeout=180, env=env,

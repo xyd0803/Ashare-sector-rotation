@@ -37,6 +37,19 @@ SUITES = [
 IDS = [name.removeprefix("_test_").removesuffix("_20261025.py") for name, _ in SUITES]
 
 
+def _child_env():
+    """子进程输出强制 UTF-8。
+
+    这些脚本会打印中文断言名。Windows 英文版 runner 的控制台默认 cp1252，
+    直接 print 中文会抛 UnicodeEncodeError——与被测逻辑毫无关系的假红。
+    判据是「断言对不对」，不是「终端能不能显示中文」，所以在这里一次钉住编码。
+    """
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return env
+
+
 @pytest.mark.parametrize("filename,purpose", SUITES, ids=IDS)
 def test_redteam_suite(filename, purpose):
     path = os.path.join(ROOT, filename)
@@ -45,7 +58,7 @@ def test_redteam_suite(filename, purpose):
     proc = subprocess.run(
         [sys.executable, filename],
         cwd=ROOT, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=600,
+        encoding="utf-8", errors="replace", timeout=600, env=_child_env(),
     )
 
     if proc.returncode != 0:
