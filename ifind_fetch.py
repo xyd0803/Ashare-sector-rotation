@@ -17,8 +17,45 @@ ifind_fetch.py —— 用同花顺 iFinD index_data 补抓缺失指数的「月�
 """
 import json, os, re, sys, time, warnings
 warnings.filterwarnings("ignore")
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ifind-finance-data"))
-from call import call, set_attribution
+
+
+def _ifind_call_dir():
+    """定位提供 call() 的 iFinD 技能目录：环境变量优先，否则自动发现。
+
+    不写死任何具体目录名。候选必须同时具备 call.py 且其中定义 set_attribution，
+    避免误命中同名但无关的模块。
+    """
+    explicit = os.environ.get("XYD_IFIND_SKILL_DIR")
+    if explicit:
+        return explicit
+    root = os.path.expanduser(
+        os.environ.get("XYD_SKILLS_ROOT") or os.path.join("~", ".workbuddy", "skills"))
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return ""
+    for name in names:
+        p = os.path.join(root, name, "call.py")
+        if not os.path.isfile(p):
+            continue
+        try:
+            with open(p, encoding="utf-8", errors="ignore") as fh:
+                if "def set_attribution" in fh.read():
+                    return os.path.join(root, name)
+        except OSError:
+            continue
+    return ""
+
+
+_CALL_DIR = _ifind_call_dir()
+if _CALL_DIR:
+    sys.path.insert(0, _CALL_DIR)
+try:
+    from call import call, set_attribution
+except ImportError as exc:
+    raise SystemExit(
+        "[ifind_fetch] 找不到 iFinD 的 call 模块。请设置 XYD_IFIND_SKILL_DIR "
+        "指向提供 call.py 的技能目录。") from exc
 
 for _s in (sys.stdout, sys.stderr):
     try:

@@ -7,7 +7,7 @@ ifind_budget.py —— SDS 侧 iFinD 预算闸适配器 + 记账 CLI（2026-10-2
 上限**（默认值见 `_DEFAULT_CAP`，须与共享账本一侧口径一致）。审计发现 SDS 技能的
 iFinD 消耗有三类路径，护栏状态不一：
 
-  ① ifind_fetch.py / ifind_fix_pb.py  → 经共享 `ifind-finance-data/call.py`，
+  ① ifind_fetch.py / ifind_fix_pb.py  → 经共享的 iFinD `call.py`，
      该 call() 已内置预算硬闸 + **require_tag 无 tag 拒绝执行**。但两个 SDS
      脚本从未 set_attribution → 一跑就被 fail-closed 拒（或被迫设全局 env，
      掩盖归因缺失）。→ 本批次给两个脚本补 `--tag` + set_attribution（见脚本内）。
