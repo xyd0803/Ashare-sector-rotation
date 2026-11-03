@@ -18,13 +18,13 @@ ifind_budget.py —— SDS 侧 iFinD 预算闸适配器 + 记账 CLI（2026-10-2
      本次运行会尝试刷新（未传 --no-refresh）→ MUST exit 3（fail-closed），
      解法 = 本地优先（--no-refresh）或逃生门 XYD_IFIND_BUDGET_OK=1。
 
-单一账本原则：配额按**账号**计，不按技能计 → 本适配器与
-XYD-earnings-analysis/ifind_budget.py **共用同一账本**
-（~/.workbuddy/skills/XYD-earnings-analysis/.evidence/ifind_ledger.jsonl，
-即 call.py 的 _LEDGER）。优先委托共享模块（单一真相源）；共享模块不可导入时
-（跨环境/skill 移位）启用的内嵌等价闸使用**同一账本、同一 cap 口径**
-（默认 80，与用户指定一致；注意 call.py 自带的内嵌兜底为 150，属其历史遗留，
-本适配器不复制该宽松值——闸的方向必须更严不能更松）。
+单一账本原则：配额按**账号**计，不按项目计 → 本适配器优先委托本机上提供
+`ifind_budget` 的共享模块（单一真相源），与其**共用同一账本**文件；共享模块
+不可导入时（跨环境/目录移位）启用的内嵌等价闸使用**同一账本、同一 cap 口径**
+（默认值与共享模块一致；注意某些历史实现自带更宽松的兜底值，本适配器不复制
+——闸的方向必须更严不能更松）。共享模块目录不写死：先读环境变量
+`XYD_SKILL_DIR`，否则在 `XYD_SKILLS_ROOT`（默认 `~/.workbuddy/skills`）下
+自动发现实际含 `ifind_budget.py` 的目录。
 
 CLI：
   python sds_ifind_budget.py --report                      # 今日用量报告
@@ -32,7 +32,7 @@ CLI：
       --note "980032.CNI 近40点" --tag sds_ingest      # MCP 路径记账（默认 n=1）
   python sds_ifind_budget.py --enforce --need 3 --tag sds_backfill   # 预检（超限 exit 3）
 
-命名纪律：本模块**不得**命名 ifind_budget.py——与 XYD-earnings-analysis 的共享模块
+命名纪律：本模块**不得**命名 ifind_budget.py——与共享模块
 同名会自引用递归（import 到自身半初始化模块 → today_count 无限递归 · 2026-10-25
 实测 RecursionError 后改名）。共享模块恒经 `import ifind_budget`（_EARN_SKILL 路径）。
 """
@@ -46,13 +46,30 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# ── 定位共享 ifind_budget（与 call.py 同路径推导）─────────────────────────────
-_EARN_SKILL = (os.environ.get("XYD_SKILL_DIR")
-               or os.path.join(os.path.expanduser("~"), ".workbuddy",
-                               "skills", "XYD-earnings-analysis"))
+# ── 定位共享 ifind_budget：环境变量优先，否则在同机 skills 目录里自动发现 ──────
+def _discover_shared_skill():
+    """找到本机上提供 ifind_budget 模块的目录。
+
+    不写死任何具体目录名：先看 XYD_SKILL_DIR，再扫描 skills 根目录下实际存在
+    ifind_budget.py 的目录。找不到返回空串，调用方自然回退到内嵌闸。
+    """
+    explicit = os.environ.get("XYD_SKILL_DIR")
+    if explicit:
+        return explicit
+    root = os.path.expanduser(
+        os.environ.get("XYD_SKILLS_ROOT") or os.path.join("~", ".workbuddy", "skills"))
+    try:
+        for name in sorted(os.listdir(root)):
+            if os.path.isfile(os.path.join(root, name, "ifind_budget.py")):
+                return os.path.join(root, name)
+    except OSError:
+        pass
+    return ""
+
+_EARN_SKILL = _discover_shared_skill()
 _LEDGER = os.environ.get("XYD_IFIND_LEDGER") or os.path.join(
-    _EARN_SKILL, ".evidence", "ifind_ledger.jsonl")
-_DEFAULT_CAP = 80          # 2026-10-16 用户指定：日上限 80（earnings 侧同值）
+    _EARN_SKILL or HERE, ".evidence", "ifind_ledger.jsonl")
+_DEFAULT_CAP = 80          # 日上限默认值，须与共享账本一侧保持一致
 _OVER_QUOTA_DEFAULT = 20   # 逃生门单次授权额度（与 earnings 侧同口径）
 
 _ib = None

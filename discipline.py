@@ -342,7 +342,7 @@ class Verdict:
     #       channel=左侧通道（无胜率数值）/ rejected=框架否决（胜率=0）/ na=不适用。
     win_rate_mode: str = ""
     odds: Dict[str, Any] = field(default_factory=dict)
-    ev: Optional[Dict[str, Any]] = None       # §EV 三档价 + EV中/乐/尾部（参照 XYD-earnings-analysis）
+    ev: Optional[Dict[str, Any]] = None       # §EV 三档价 + EV中/乐/尾部（参照个股盈利面框架）
     p_star: Optional[Dict[str, Any]] = None   # P* 风险调整买点（2026-09-08 · 只读；None=未产出）
     conviction_score: Optional[float] = None  # O10 跨板块可比风险预算 = 仓位 × 胜率/100
     conviction_cap: float = 0.60              # O10 组合层总上限（跨板块 Σconviction 须≤此）
@@ -1280,7 +1280,7 @@ class DisciplineEngine:
             notes.append("触及极端乐观×90% → 强制减仓/清仓，目标仓位归零")
         return round(pos, 4), notes
 
-    # ---------- §EV 三档价 + EV 中/乐/尾部（参照 XYD-earnings-analysis · 2026-08-15）----------
+    # ---------- §EV 三档价 + EV 中/乐/尾部（参照个股盈利面框架 · 2026-08-15）----------
     def _ev(self, inp: SectorInput, odds: Dict[str, Any], win: Optional[int],
             trace, warnings) -> Optional[Dict[str, Any]]:
         """基于估值主锚的 p5/p20/p50/p80/p95 分位带，算三档目标价与 EV。

@@ -3,7 +3,7 @@
 """
 llm_fill_guard.py — LLM 轨输出机械复核层（G3 · 2026-09-04）
 ============================================================
-参照 XYD-earnings-analysis 的 handfill_guard 思路：M4 草稿标 _llm_required 的
+参照 个股盈利面框架 的 handfill_guard 思路：M4 草稿标 _llm_required 的
 9 组判断字段由 LLM 补齐后，**必须先过本守卫**才准喂引擎（discipline.py 闸门
 仍是最后兜底，本层是上游早失败，省一次引擎运行并给出更可读的归因）。
 

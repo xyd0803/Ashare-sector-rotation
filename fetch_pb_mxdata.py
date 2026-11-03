@@ -15,8 +15,8 @@ fetch_pb_mxdata.py —— 经 mx-data 直连 mkapi2 拉取指数 5 年日频 PB/
   --metric pe → data/index_daily_pe/{CODE}.json（与 PB 文件同构：series 键仍为 "pb"，
                 另加 "metric":"pe" 字段；bands registry 不含 PE，PE 刷新状态走
                 data_refresh --status 的 index_daily_pe 扫描）
-依赖：mx-data 技能（同目录 mx_data.py），key 自动从 ~/.workbuddy/mcp.json 的
-      em_api_key 取（即 MX_APIKEY 值）。
+依赖：mx-data 技能（同目录 mx_data.py），key 自动从 MCP 客户端配置的
+      em_api_key 取（可用环境变量 XYD_MCP_JSON 指定配置文件位置）。
 注意：妙想直连偶发 0 返回（间歇故障，连 PB 对照组也 0）→ 判通道问题，稍候重试，
       勿误判为标的无数据。
 """
@@ -36,7 +36,9 @@ if str(MXDATA_DIR) not in sys.path:
 
 
 def _load_key():
-    mcp = json.loads((Path.home() / ".workbuddy" / "mcp.json").read_text(encoding="utf-8"))
+    p = Path(os.environ.get("XYD_MCP_JSON")
+             or (Path.home() / ".workbuddy" / "mcp.json"))
+    mcp = json.loads(p.read_text(encoding="utf-8"))
     for v in mcp.get("mcpServers", {}).values():
         k = v.get("headers", {}).get("em_api_key")
         if k:

@@ -1,4 +1,4 @@
-# XYD-supply-demand-sector · 修补史与事故复盘（CHANGELOG）
+# Ashare-sector-rotation · 修补史与事故复盘（CHANGELOG）
 
 > 2026-09-07 审议后自 SKILL.md 迁出（审议 RC2：文档与代码双真理、prose 数字漂移无机器锁）。
 
@@ -136,18 +136,18 @@
 - **源路由实测（三源能力边界，供后续复用）**：
   - **neodata（免费）**：覆盖 .SH/.SZ 主体指数；**CSI 系列（930xxx/931xxx/H30xxx/000xxx.CSI）与 950125.SH 无返回**；SPX.US 仅 PE 无 PB；不支持 .CNI（须 .SZ）。已存原始响应 `data/raw/neodata/nd_20260801_20261024_b1/b2.json`。
   - **妙想（免费·fetch_pb_mxdata）**：33/34 全覆盖（含全部 CSI 系列、SPX.GI PB、港股），唯 950125.SH（科创半导体材料设备）无数据。
-  - **iFinD（配额）**：兜底 950125.SH，1 次调用（--tag sds_stale_refresh --charge 1，账本 1/80）。
+  - **iFinD（配额）**：兜底 950125.SH，1 次调用（--tag sds_stale_refresh --charge 1，账本记 1 次）。
 - **执行**：① 妙想整序列重建 33 只（22 只无覆盖 CSI 系列 + 11 只先经 neodata 合并验证后又以妙想同源自全量 supersede——neodata 合并暴露同日口径差 7~12% 的跨源标定证据，但终态取同源单口径序列，避免混合标定噪声）；② 950125.SH 经 iFinD 增量合并（as_of 2026-08-13→10-23，重叠期中位比值 1.0314 归一）；③ 顺带清掉 8 只 15 天新鲜度 stale（妙想）；④ 归档 2 只无后缀孤儿缓存（930709、HSTECH——活框架只认 .CSI/.HI 后缀键，仅 archive 旧稿引用；备份 `.rt_tmp/sds_bak/` + `archive/2026-10-25/_why_*.json` 留痕）。
 - **fetch_pb_mxdata.py 健壮性修复（E-1 前瞻）**：`fetch_one` 遇妙想直连返回 None/非 dict 时原代码 `r.get` 直接 AttributeError **崩掉整个刷新循环**（一次瞬时故障=整批 codes 不处理）；改为 per-code 失败返回 + 一次 2s 重试（对齐文件头既有约定「偶发 0 返回=通道瞬时故障，稍候重试」）。实测：本批 12 只一批跑到第 11 只触发该崩溃，修复后同批 12/13 完成（仅 950125 无覆盖）。
 - **iFinD 日历日口径防御（本批新发现·待登记）**：iFinD 指数估值返回**日历日序列**（周末/节假日顺延值，本次窗口 90 行中 20 行非交易日=22%）；直接合并会往交易日序列注入重复值污染分位。本次处置：按「新鲜缓存的交易日日期并集」机械过滤后再 ingest（不碰共享 ingest 语义）。既有 5 只 ifind 源缓存已含 6/1224 周末点（历史遗留，非本批引入）。
 - **验证**：`run_all.py` **六道闸门全绿**（EtfPreflight 首次 exit=0 · 指纹锁 · Selfcheck · 红队 77/77 · Stress MC2000 · Backtest）。回测位移（数据驱动非逻辑回归）：signal_count 197→195、win_rate 0.8071→0.8154、final_nav 1.2651→1.3205（后期信号用上 10-23 新锚）。make_stats：红队77/ETF55/PB55/PE1。
-- **遗留 WARN（3 项·不阻断）**：quant_raw 159755 无月频缓存（S-12 覆盖缺口，待补月频）；静态 lint（pyflakes 未装，既有）；iFinD 预算今日 1/80。
+- **遗留 WARN（3 项·不阻断）**：quant_raw 159755 无月频缓存（S-12 覆盖缺口，待补月频）；静态 lint（pyflakes 未装，既有）；预算闸今日已记 1 次。
 
 ## 2026-10-25 第一批 P0 落地（D-1/D-2/D-3/D-5①/L-1 · 核心逻辑零改动）
 
 - **背景**：三维审计（数据层 55% / 逻辑层 90% / 效率层 85%）后执行第一批 P0 五项。红线：discipline.py 胜率公式/EV 公式/三道闸/否决规则一律不碰。
 - **D-2 泛化非破坏性合并器 `merge_valuation_gap.py`（新建）**：`ingest_ifind_valuation._rebuild` 内嵌算法收敛为唯一实现，所有 ingest_*_valuation 共用。语义逐位保留：同日冲突保留原源值、缺口按重叠期中位比值归一到原源口径、重叠 <3 fail-closed 拒拼、幂等 source 标注（`+<provider>_incr(_calib)` 不累加）、5y 窗口裁剪、<100 点拒绝覆盖、as_of 恒取真实序列末值。`has_old` 参数区分「缓存存在但序列空」（走校准分支拒拼）vs「新缓存」（直落），匹配原语义。回归 `_test_merge_regress_20261025.py` 嵌入重构前 verbatim 参照，**7/7 逐位对账一致**。
-- **D-3 iFinD 预算闸（三路径补齐）**：① `sds_ifind_budget.py`（新建·适配器）委托 earnings 技能共享 `ifind_budget` 模块（**单一账本**：iFinD 配额按账号计不按技能计，ledger `XYD-earnings-analysis/.evidence/ifind_ledger.jsonl`，cap=80/日），共享模块不可用时启内嵌等价闸（同账本同 cap）；② `ifind_fetch.py`/`ifind_fix_pb.py` 增 `--tag` + `set_attribution`（call.py 内置 require_tag，无归因一跑即拒）；③ `ingest_ifind_valuation.py` 经 `--charge/--no-charge` 给 MCP 直调路径记账；④ `preflight_etf.py` 新增 REAL_CHECKS「iFinD 预算闸」（归因接线核验 + 耗尽且无 --no-refresh 且无逃生门 → MUST exit3 + ≥80% cap → WARN；检查自身异常 fail-open）。注入测试 `_test_ifind_budget_gate_20261025.py` 6 组 10 断言全过（耗尽 MUST/本地优先放行/逃生门放行/归因接线/记账闭环/防递归）。
+- **D-3 iFinD 预算闸（三路径补齐）**：① `sds_ifind_budget.py`（新建·适配器）委托共享的 `ifind_budget` 模块（**单一账本**：配额按账号计不按项目计，账本路径由使用者的运行环境决定，cap 由本地配置给出），共享模块不可用时启内嵌等价闸（同账本同 cap）；② `ifind_fetch.py`/`ifind_fix_pb.py` 增 `--tag` + `set_attribution`（call.py 内置 require_tag，无归因一跑即拒）；③ `ingest_ifind_valuation.py` 经 `--charge/--no-charge` 给 MCP 直调路径记账；④ `preflight_etf.py` 新增 REAL_CHECKS「iFinD 预算闸」（归因接线核验 + 耗尽且无 --no-refresh 且无逃生门 → MUST exit3 + ≥80% cap → WARN；检查自身异常 fail-open）。注入测试 `_test_ifind_budget_gate_20261025.py` 6 组 10 断言全过（耗尽 MUST/本地优先放行/逃生门放行/归因接线/记账闭环/防递归）。
   - ⚠️ **事故教训（已登记 PITFALLS S-11）**：适配器初版命名 `ifind_budget.py` 与共享模块同名 → `import ifind_budget as _ib` 绑定半初始化自身 → `today_count()` 无限递归 RecursionError。改名 `sds_ifind_budget.py` 并立命名纪律。教训：跨技能委托共享模块时，本地包装器**不得与共享模块同名**。
 - **D-1 neodata 估值合并 `ingest_neodata_valuation.py`（新建）**：免费源 neodata index_valuation（PB(LF)/PE(TTM) 日频 T+1）接入。JSON/markdown 双解析（「--」容错）；`_base_code()` 主体代码匹配（980032.CNI↔980032.SZ 同指数，neodata 不支持 .CNI 后缀）；经 merge_valuation_gap 合并（provider=neodata，幂等后缀）；无覆盖显式 SKIP exit0（覆盖缺口≠数据错误）；免费源不记账。端到端 6 场景验证：fail-closed exit2 / 无覆盖 exit0 / 缺文件 exit4 / 000015 真实合并 45 点（同日 0 改动、新增点=neodata/1.0172、now 诚实、bands 同步、source 正确带 _calib）/ 新缓存 55<100 正确拒绝 / markdown 兜底。**000015 PB 缓存 stale→fresh（as_of 2026-08-14→2026-10-23，pct 93.0→99.26），全局 stale 48→47**。
 - **D-5① quant_raw 装配修复（run_sector_pipeline.py）**：`_find_etf_cache` 优先精确名再 glob `*{etf}*.json`（多候选取 mtime 最新）；`_assemble_quant_raw` 改返回 `(quant_raw|None, reason)`，reason 区分「本地无匹配缓存文件 / 月频仅 N 点 (<13) / 解析失败」三类成因，调用处按真实成因生成 `_llm_required` 文案；preflight 新增「quant_raw 装配匹配」检查（缓存文件在但装配找不到 → MUST；map 内 ETF 无缓存 → WARN 覆盖缺口显式化）。54/54 可装配 + 159755 缺口正确 WARN。
@@ -171,7 +171,7 @@
 - **② 新模块 `sector_pstar.py`**：`P*=[W·mid+(1−W)·bear_eff]/(1+r)`；`r=clamp(r_base(W)×s_vol,3%,60%)`；`s_vol=clamp(σ_eff/σ_ref,0.25,2.0)`；`σ_eff=σ_ann·√(H/12)`（H 缺省=EV 持有期 O8=24）。**止损+摩擦走 `bear_eff=max(bear,P(1−stop−fric))`，不进 r**（r 已由 σ 表达风险，再计一次=重复计入）。σ 解析链：显式 → 序列派生(√252) → 资产类别默认表 → 缺失 `s_vol=1.0`（零回归）。
 - **集成**：`SectorInput` 增 `p_star_sigma_ann/p_star_horizon_months/p_star_stop_pct/p_star_friction_pct/win_map_mode`；`Verdict.p_star`（只读，None=未产出）；`_p_star()` 全程 try/except，模块缺失/异常只留 trace 不阻断；硬否决(`win=0`，EV 仅 disclosure)与左侧通道(`win=None`) → `p_star=None`。`_win_rate` 的 `compute_quant` 改传 `self._quant_params(inp)`（支持 mode 覆盖）。
 - **验证**：`sector_pstar --selfcheck` 20 项（等价性 216 组 `P*>P ⟺ EV_eff>r`、σ=0/极端/缺失、W=0/100/越界、现价=0、mid 缺失、单调性×3、软饱和、幂等、序列派生）；`quant_winrate --selfcheck` 增 7 项凸映射用例；新增 `_check_pstar_integration.py`（引擎级 15 项：σ 解析链/ETF vs sector/绝对价/止损不改 r/硬否决与左侧通道/convex-linear 差异/锚点与单调）。**`run_all.py` 五步全绿**（Preflight 指纹 d390ff51 / Selfcheck 8 模块 / 红队 / 压力 / 回测）。
-- **盈利面同步**：`XYD-earnings-analysis/p_star.py` 补**同构但参数独立**的 σ 分支（`SIGMA_CFG`，σ_ref=30%/H_ref=12）；σ 缺失 → `s_vol=1.0` → r 与首版逐位一致（`test_p_star_regression.py` 5/5 零回归 + 终检 exit0）。两框架**公式同源、参数独立**，改一处不影响另一处。
+- **盈利面同步**：另一独立框架的同名 `p_star.py` 补**同构但参数独立**的 σ 分支（`SIGMA_CFG`，σ_ref=30%/H_ref=12）；σ 缺失 → `s_vol=1.0` → r 与首版逐位一致（`test_p_star_regression.py` 5/5 零回归 + 终检 exit0）。两框架**公式同源、参数独立**，改一处不影响另一处。
 - **文档**：SKILL.md 新增 §P\* 全章 + §12.1 凸映射段 + 脚本清单 `sector_pstar.py` + 输出契约示例；params.json 增 `p_star` 段与 `win_quant.win_map_mode/gamma`，version→1.11.0，params.lock 重生成。
 
 ## 2026-09-07 端到端审议 + P0~P2 治理落地（engine 1.9.0 · params 1.10.0 未动 · 指纹不变）

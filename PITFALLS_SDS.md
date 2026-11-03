@@ -1,4 +1,4 @@
-# XYD-supply-demand-sector 踩坑登记（PITFALLS_SDS）
+# Ashare-sector-rotation 踩坑登记（PITFALLS_SDS）
 
 > 🔴 **本文件是 preflight 的"弹药库"，不是日记。**
 > 每次撞到墙 → **必须**在这里登记，并在 `PITFALLS_REGISTRY.json` 同步一条结构化条目。
@@ -91,7 +91,7 @@
   的分母偏小 → PB 系统性偏大 → 分位偏高 → 锚价偏低 → 三档价/赔率整体偏移。
 - 根因：旧 preflight 只有「as_of 是否虚报（== 序列末值）」与「是否 stale >15 天」两条，
   **都没有"是否跨过财报期"这个维度**——新鲜度只对"价格"负责，不对"财报口径"负责。
-  这与 XYD-earnings-analysis 的 `Q3-EARNINGS-STALE-01`（三季报已出仍按中报打分）是同一
+  这与另一个独立框架的 `Q3-EARNINGS-STALE-01`（三季报已出仍按中报打分）是同一
   类病害的另一个载体：**数据源更新了，派生链没跟着换口径**。
 - 发现方式：读源码（`rebuild_pb_daily.py` 自述"BVPS 为慢变量（财报级更新）"）+ 值比对
 - 代价：静默输出过期结论（不报错，最危险）

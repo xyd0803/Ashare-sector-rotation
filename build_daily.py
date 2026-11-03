@@ -3,9 +3,10 @@
 """
 build_daily.py —— 从妙想 MCP 落地文件重建日频指数数据并下采样为月度
 ================================================================================
-扫描 ~/.workbuddy/projects/**/tool-results/ 下所有妙想结果文件：
-  · chatcmpl-tool-*.txt           （本会话内联落盘）
-  · mcp-connector-proxy-mx-ds-mcp_*.txt  （早期代理落盘）
+扫描 MCP 客户端的「工具结果落盘目录」下的全部结果文件（目录与文件名前缀见下方
+_TOOL_RESULTS_GLOB / _CONNECTOR_PREFIX，均可用环境变量覆盖）：
+  · chatcmpl-tool-*.txt            （会话内联落盘）
+  · mcp-connector-proxy-*.txt      （连接器代理落盘）
 解析宽表结构 {data:[{columns:[header, 日期...], items:[[指标名,值...]], sheetName}]}
 提取 收盘价/成交量/市净率PB（及 市盈率PE/股息率），去后缀、去 '-'，按交易日对齐。
 
@@ -79,17 +80,21 @@ def extract_name(header):
     return header.split("(")[0].strip()
 
 # ---- 扫描落地文件 -----------------------------------------------------------
+# MCP 客户端把工具返回落盘的位置和文件前缀因客户端而异，因此两者都做成可覆盖
+# 的配置项：换一个客户端只需设环境变量，不必改代码。
+_TOOL_RESULTS_GLOB = os.getenv(
+    "MCP_TOOL_RESULTS_GLOB", "~/.workbuddy/projects/**/tool-results")
+# 连接器代理落盘的文件名前缀（按自己的客户端调整）
+_CONNECTOR_PREFIX = os.getenv(
+    "MCP_CONNECTOR_FILE_PREFIX", "mcp-connector-proxy-mx-ds-mcp")
+
 def scan_files():
-    roots = glob.glob(os.path.expanduser("~/.workbuddy/projects/**/tool-results"),
-                      recursive=False)
-    # recursive=False 但 ** 已展开一层；用 glob 递归更稳
     cand = []
-    for r in glob.glob(os.path.expanduser("~/.workbuddy/projects/**/tool-results"),
-                       recursive=True):
+    for r in glob.glob(os.path.expanduser(_TOOL_RESULTS_GLOB), recursive=True):
         if not os.path.isdir(r):
             continue
         for fn in os.listdir(r):
-            if fn.startswith("mcp-connector-proxy-mx-ds-mcp") and fn.endswith(".txt"):
+            if fn.startswith(_CONNECTOR_PREFIX) and fn.endswith(".txt"):
                 cand.append(os.path.join(r, fn))
             elif fn.startswith("chatcmpl-tool-") and fn.endswith(".txt"):
                 cand.append(os.path.join(r, fn))

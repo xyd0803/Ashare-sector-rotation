@@ -1,4 +1,4 @@
-# xyd-supply-demand-sector
+# Ashare-sector-rotation
 
 **A decision-discipline engine for A-share sector rotation.** It turns a supply/demand
 read plus a valuation percentile into a verdict you can audit: a win rate, a quadrant,
@@ -41,8 +41,8 @@ Three consequences show up everywhere in the code:
 No API key. No network. No data directory. Requires only `requests`.
 
 ```bash
-git clone https://github.com/<your-account>/xyd-supply-demand-sector.git
-cd xyd-supply-demand-sector
+git clone https://github.com/xyd0803/Ashare-sector-rotation.git
+cd Ashare-sector-rotation
 pip install -r requirements.txt
 python discipline.py --demo
 ```

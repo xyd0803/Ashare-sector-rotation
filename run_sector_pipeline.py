@@ -2,7 +2,7 @@
 """
 run_sector_pipeline.py — XYD-供需驱动板块 · 机械段流水线（M1-M4，2026-09-04 批次一）
 
-参照 XYD-earnings-analysis/run_pipeline.py 的「部分机械化+部分LLM」架构：
+参照 个股盈利面框架的 run_pipeline.py 的「部分机械化+部分LLM」架构：
   S1 指数解析   : ETF代码 → 跟踪指数（data/meta/etf_index_map.json），或直接给指数代码
   S2 序列读取   : data/index_daily_pb/{指数}.json（mx-ds-mcp 日频 PB 落盘），含新鲜度门
   S3 分位五档   : p5/p20/p50/p80/p95、当前分位、窗口年数（O9 完整周期检查）、V10 锚定 p95 泡沫延伸预检

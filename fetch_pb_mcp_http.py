@@ -24,8 +24,13 @@ MCP_URL = "https://mxapi.eastmoney.com/mxds/mcp"
 
 
 def load_key():
-    """从 ~/.workbuddy/mcp.json 读取 mx-ds-mcp 的 em_api_key。"""
-    p = os.path.expanduser("~/.workbuddy/mcp.json")
+    """读取 MCP 客户端配置里的 em_api_key。
+
+    路径优先级：环境变量 XYD_MCP_JSON → 客户端的标准配置位置。
+    两处都取不到时回退到环境变量 EM_API_KEY。
+    """
+    p = os.path.expanduser(
+        os.environ.get("XYD_MCP_JSON") or "~/.workbuddy/mcp.json")
     if os.path.exists(p):
         try:
             d = json.load(open(p, encoding="utf-8"))

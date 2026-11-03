@@ -177,7 +177,7 @@ def check_report_cycle() -> tuple[str, str, list[str]]:
     （rebuild_pb_daily.py 明文："BVPS 为慢变量（财报级更新）"）。一旦新的法定披露期
     已过、而序列 as_of 仍停在该截止日之前，BVPS/EPS 锚点就**不可能**包含最新财报
     → PB = 点位/BVPS 中分母偏小 → PB 系统性偏大 → 分位偏高 → 锚价偏低 → 结论方向性失真。
-    这与 XYD-earnings-analysis 的 Q3-EARNINGS-STALE-01 是**同一类病害的另一个载体**：
+    这与 个股盈利面框架 的 Q3-EARNINGS-STALE-01 是**同一类病害的另一个载体**：
     旧 preflight 只有「as_of 是否虚报 / 是否 >15 天」两条，都没有"是否跨过财报期"这个维度。
 
     判定：取**已过截止日**里最晚那个报告期 D；序列 as_of < D → 该序列未含该期财报。

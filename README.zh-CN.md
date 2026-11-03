@@ -1,4 +1,4 @@
-# xyd-supply-demand-sector
+# Ashare-sector-rotation
 
 **A 股板块轮动的「纪律层」引擎。** 它把一份供需判断加一个估值分位，变成一份可审计的结论：
 胜率、象限、建议仓位、三档价格——以及它**拒绝更乐观**的全部理由。
@@ -36,8 +36,8 @@
 不需要 API Key、不需要联网、不需要数据目录。只依赖 `requests`。
 
 ```bash
-git clone https://github.com/<your-account>/xyd-supply-demand-sector.git
-cd xyd-supply-demand-sector
+git clone https://github.com/xyd0803/Ashare-sector-rotation.git
+cd Ashare-sector-rotation
 pip install -r requirements.txt
 python discipline.py --demo
 ```

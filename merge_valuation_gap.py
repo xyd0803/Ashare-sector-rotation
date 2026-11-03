@@ -7,7 +7,7 @@ merge_valuation_gap.py —— 估值序列「非破坏性缺口合并器」（20
 增量合并逻辑（同日冲突保留原源 / 重叠期中位比值归一 / 重叠<3 fail-closed /
 幂等 source 标注 / 5y 窗口裁剪 / bands 同步），但它只服务 iFinD 一条链。neodata
 （免费源·指数估值日频）接入时如果复制一份，两条链的口径防线就会各自漂移——
-参照 XYD-earnings-analysis 的 local_fund_bridge 纪律：**同一套合并语义只允许
+参照 个股盈利面框架 的 local_fund_bridge 纪律：**同一套合并语义只允许
 一个实现**。
 
 本模块 = 该合并语义的唯一实现，所有 ingest_*_valuation.py 共用：

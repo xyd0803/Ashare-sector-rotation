@@ -56,8 +56,10 @@ git config core.hooksPath .githooks
 
 ### 3.2 身份：先决定用哪个邮箱
 
-当前全部 11 条提交的邮箱是 `<gitee-noreply>@user.noreply.gitee.com`。
+当前全部提交的邮箱是 `<gitee-noreply>@user.noreply.gitee.com`。
 它是 Gitee 的 noreply 地址：**不可反查**，所以在 GitHub 上公开也不会泄露联系方式。
+代价是 GitHub 认不出这个域，提交不会关联到你的账号（作者显示为纯文本、贡献图不计）。
+要亮贡献图，必须按下面换成 GitHub 自己的 noreply。
 
 如果你想换成 GitHub 自己的 noreply（形如 `12345+用户名@users.noreply.github.com`，
 可以在 GitHub → Settings → Emails 里查到），注意 `git config` **只影响新提交**，
@@ -79,7 +81,7 @@ git push --force-with-lease origin main
 ### 3.3 推送
 
 ```bash
-git remote add github https://github.com/<你的账号>/xyd-supply-demand-sector.git
+git remote add github https://github.com/<你的账号>/Ashare-sector-rotation.git
 git push github main          # 只推 main
 ```
 
@@ -89,22 +91,31 @@ git push github main          # 只推 main
 ### 3.4 仓库设置（决定别人会不会点进来）
 
 - **Description**：一句话说清「是什么 + 给谁用」，不要写「A quant framework」。
-  例：`Auditable buy/sell verdicts for A-share sector ETFs — win rate, valuation
-  percentile, position size, and the reasons it refused to be optimistic.`
+  本项目实际使用（面向中文投资者，GitHub 搜索结果只显示前 ~150 字符，务必把
+  关键词放在最前）：
+
+  > A 股行业、板块与 ETF 轮动的「纪律层」：供需格局 + 5 年估值分位 → 可逐条质询的
+  > 胜率、象限、建议仓位、三档价格，以及它拒绝更乐观的全部理由（缺了哪个数据、
+  > 降级损失几个百分点、参数指纹是什么）。不做预测，只回答「凭我确实知道的东西，
+  > 多少仓位站得住」。多数轮动工具停在热力图，这里继续量化「它不知道多少」。
+  > 零 API key、可离线跑 demo；另附 21 条踩坑登记——哪些思路已被证伪、别重走。
+  > 行业轮动·估值分位·量化回测·ETF 轮动策略
 - **Topics**：`quant` `a-share` `etf` `sector-rotation` `valuation` `investment-research`
 - **Social preview**：上传一张 1280×640 的图（终端 demo 输出截图即可）
 - **About → Releases**：打 `v1.1.0`，附一条 CHANGELOG 摘要
 
-## 4. 改名（可选）
+## 4. 仓库名
 
-仓库名里的 `xyd` 对陌生人没有信息量。若改成 `ashare-sector-rotation` 一类：
+已定为 `Ashare-sector-rotation`（原名 `xyd-supply-demand-sector` 里的 `xyd`
+对陌生人没有信息量）。改名后必须同步文档，否则访客照 README 操作会 404：
 
 ```bash
-grep -rn "xyd-supply-demand-sector" README.md README.zh-CN.md
+grep -rn "xyd-supply-demand-sector" --exclude-dir=.git .    # 应无输出
 ```
 
-只需改两份 README 的 `git clone` 与 `cd` 两行（当前已是 `<your-account>` 占位，
-改的只是仓库名部分）。GitHub 会自动重定向旧地址，不会产生死链。
+只需改两份 README 的 title / `git clone` / `cd`（当前用 `<your-account>` 占位，
+改的只是仓库名部分），以及本文档 3.3 的 remote 地址。GitHub 会自动重定向旧地址，
+不会产生死链；但**文档里的硬编码旧名不会自动跳转**，必须手动改。
 
 ## 5. 日常同步
 

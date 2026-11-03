@@ -1,4 +1,4 @@
-# XYD-supply-demand-sector · 欠账登记（BACKLOG）
+# Ashare-sector-rotation · 欠账登记（BACKLOG）
 
 > 建立于 2026-10-25（三维审计 L-4）。
 > **存在理由**：本技能的历史欠账散落在 `CHANGELOG.md` 的「待定 / 待登记 / 遗留 WARN」、
