@@ -37,6 +37,15 @@ import re
 import subprocess
 import sys
 
+# 控制台编码防御：脚本输出带中文，而 Windows 英文版的控制台默认 cp1252，直接 print
+# 会抛 UnicodeEncodeError——闸门照样以非零码退出，但原因是「打印失败」而不是
+# 「发现泄露」。两种红看起来一样，排查方向却完全相反，所以在这里先钉住编码。
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # ---------- 1. 不该被跟踪的路径 ----------
 # 即便有人用 `git add -f` 强推，也要在这里拦下。
 FORBIDDEN_PATH = [

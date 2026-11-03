@@ -50,6 +50,14 @@ ROOT = os.path.dirname(HERE)
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
+# 同 check_no_secrets：先把控制台编码钉成 UTF-8，避免 Windows 英文版的 cp1252
+# 把「打印中文失败」伪装成「闸门判定不通过」。
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import check_no_secrets as guard  # noqa: E402  (复用同一份规则，避免两套标准漂移)
 
 MAX_BLOB_BYTES = 5 * 1024 * 1024
