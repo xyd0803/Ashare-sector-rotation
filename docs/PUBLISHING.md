@@ -110,7 +110,8 @@ git push github main          # 只推 main
 对陌生人没有信息量）。改名后必须同步文档，否则访客照 README 操作会 404：
 
 ```bash
-grep -rn "xyd-supply-demand-sector" --exclude-dir=.git .    # 应无输出
+grep -rn "xyd-supply-demand-sector" README.md README.zh-CN.md \
+     BACKLOG.md CHANGELOG.md PITFALLS_SDS.md    # 应无输出
 ```
 
 只需改两份 README 的 title / `git clone` / `cd`（当前用 `<your-account>` 占位，
