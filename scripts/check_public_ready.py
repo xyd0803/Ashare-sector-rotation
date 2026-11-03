@@ -74,6 +74,12 @@ REQUIRED_FILES = [
     ".gitignore",
 ]
 
+# 仓库名的唯一规范写法：首字母大写。
+# 小写形态拆成两段拼接——否则本脚本会命中自己的规则（自指误报，
+# 与个人路径检查踩过的是同一个坑）。
+CANONICAL_NAME = "Ashare-sector-rotation"
+_LOWER_NAME = "ashare-sector-" "rotation"
+
 
 def git(args, stdin=None):
     """执行 git，返回 (成功?, stdout_bytes, stderr_text)。"""
@@ -240,6 +246,27 @@ def check_required_files(sha):
     return [f for f in REQUIRED_FILES if f not in present], ""
 
 
+def check_naming(sha):
+    """仓库名必须在全库统一为大写开头的规范写法。
+
+    GitHub 对 URL 大小写不敏感、旧链接自动 301，所以小写写法不会 404——正因如此
+    它很容易被放过，最终表现为仓库页、README、文档三处显示不一致。这个检查把
+    「不会报错」变成「会变红」。
+    """
+    ok, out, err = git(["grep", "-nI", "--no-color", "-e", _LOWER_NAME, sha])
+    if not ok:
+        if err.strip():                     # 退出码 1 = 无命中（通过）；>1 = 出错
+            return [f"[命名] git grep 执行失败：{err.strip()[:120]}"]
+        return []
+    hits = []
+    for line in out.decode("utf-8", "replace").splitlines():
+        parts = line.split(":", 3)          # <ref>:<path>:<lineno>:<text>
+        if len(parts) == 4:
+            hits.append(f"[命名] {parts[1]}:{parts[2]} 用了小写仓库名，"
+                        f"应统一为 {CANONICAL_NAME}")
+    return hits
+
+
 def run_demo():
     """剥离凭证后跑离线 demo：README 的核心承诺，必须由脚本验证而非声称。"""
     env = {k: v for k, v in os.environ.items()
@@ -316,10 +343,13 @@ def main():
         if not demo_ok:
             problems.append(f"[离线 demo] discipline.py --demo 未通过：{why}")
 
+    # --- 7. 命名一致性 ---
+    problems.extend(check_naming(sha))
+
     print()
     if not problems:
         print(f"[PASS] {len(commits)} 次提交可公开：身份已匿名化、历史无凭证与个人路径、"
-              f"无禁入目录、无超大对象、必备文件齐全、离线 demo 通过。")
+              f"无禁入目录、无超大对象、必备文件齐全、仓库名统一、离线 demo 通过。")
         return 0
 
     print(f"[FAIL] 该 ref 还不能公开，共 {len(problems)} 项问题：")
@@ -331,6 +361,7 @@ def main():
     print("  内容类 → 当前提交修掉不够，必须改写历史（见 docs/PUBLISHING.md）")
     print("  路径类 → 确认 .gitignore 生效后再重新提交；已入历史的需 filter-branch --index-filter")
     print("  体积类 → 大对象需 git filter-repo --strip-blobs-bigger-than")
+    print(f"  命名类 → 改成 {CANONICAL_NAME}（首字母大写），三处都要改：README、文档、remote")
     return 1
 
 

@@ -88,7 +88,7 @@ git push --force-with-lease origin main local-backup   # 私有备份仓也要�
 ### 3.3 推送
 
 ```bash
-git remote add github https://github.com/<你的账号>/Ashare-sector-rotation.git
+git remote add github https://github.com/xyd0803/Ashare-sector-rotation.git
 git push github main          # 只推 main
 ```
 
@@ -114,16 +114,23 @@ git push github main          # 只推 main
 ## 4. 仓库名
 
 已定为 `Ashare-sector-rotation`（原名 `xyd-supply-demand-sector` 里的 `xyd`
-对陌生人没有信息量）。改名后必须同步文档，否则访客照 README 操作会 404：
+对陌生人没有信息量）。
+
+**大小写固定为「大写 A 开头」，全库只用这一种写法。** 理由是 GitHub 对 URL
+大小写不敏感、旧链接自动 301，所以用小写也能 clone 成功——正因如此它不会报错，
+只会悄悄积累成仓库页、README、文档三处显示不一致，访客抄地址时最容易错在这里。
+`check_public_ready.py` 的第 7 项会扫历史里的小写写法并直接判红，不靠自觉。
+
+改名（或再次改名）后必须同步文档，否则访客照 README 操作会 404：
 
 ```bash
 grep -rn "xyd-supply-demand-sector" README.md README.zh-CN.md \
      BACKLOG.md CHANGELOG.md PITFALLS_SDS.md    # 应无输出
 ```
 
-只需改两份 README 的 title / `git clone` / `cd`（当前用 `<your-account>` 占位，
-改的只是仓库名部分），以及本文档 3.3 的 remote 地址。GitHub 会自动重定向旧地址，
-不会产生死链；但**文档里的硬编码旧名不会自动跳转**，必须手动改。
+只需改两份 README 的 title / `git clone` / `cd`，以及本文档 3.3 的 remote 地址。
+GitHub 会自动重定向旧地址，不会产生死链；但**文档里的硬编码旧名不会自动跳转**，
+必须手动改。
 
 ## 5. 日常同步
 
