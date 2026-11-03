@@ -7,7 +7,8 @@ _test_ifind_budget_gate_20261025.py —— D-3 预算闸注入测试（2026-10-2
 子进程 + 临时账本（XYD_IFIND_LEDGER 重定向）对 check_ifind_budget 做 6 组
 注入，全部必须按预期触发/放行：
 
-  T1 委托健康：sds_ifind_budget.is_shared()==True
+  T1 委托健康：有共享模块时必须 is_shared()==True；没有时（干净克隆/CI 常态）
+     退为「回退实现可用且不自引用递归」——两种环境测的是同一件事的不同分支
      （回归 2026-10-25 实测 RecursionError：SDS 模块曾命名 ifind_budget.py，
       与共享模块同名 → import 到自身半初始化模块 → today_count 无限递归）
   T2 耗尽拦截：临时账本预置 80 笔（=cap）→ check_ifind_budget level==MUST
@@ -33,12 +34,19 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PY = sys.executable
 FAILS = []
+SKIPS = []
 
 
 def check(name, cond, detail=""):
     print(f"  [{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
     if not cond:
         FAILS.append(name)
+
+
+def skip(name, why):
+    """环境前提不成立：不判过、也不判红，但要显式说出来，不能静默。"""
+    print(f"  [SKIP] {name} — {why}")
+    SKIPS.append(f"{name}（{why}）")
 
 
 def _run(code: str, env_extra: dict | None = None) -> str:
@@ -54,8 +62,17 @@ def main() -> int:
     print("== T1 委托健康（防自引用递归回归）==")
     out = _run("import sys; sys.path.insert(0, r'.'); import sds_ifind_budget as ib;"
                "print('SHARED' if ib.is_shared() else 'LOCAL'); print(ib.budget_report())")
-    check("is_shared()==True", "SHARED" in out, out.strip().splitlines()[-1] if out.strip() else "")
-    check("budget_report 可读", "iFinD 今日" in out)
+    if "SHARED" in out:
+        check("is_shared()==True（已委托共享账本）", True)
+        check("budget_report 可读", "iFinD 今日" in out)
+    elif "LOCAL" in out:
+        # 干净克隆 / CI 就是这种环境：共享模块根本没装，委托无从发生。这时仍要证明
+        # 被守护的性质——回退实现能正常返回，而不是 import 到自身半初始化模块后递归。
+        skip("is_shared()==True", "本环境未发现共享模块，委托断言不适用")
+        check("无共享模块时回退可用（不递归、可读）", "iFinD 今日" in out,
+              out.strip().splitlines()[-1] if out.strip() else "")
+    else:
+        check("sds_ifind_budget 可导入", False, out.strip()[-200:])
 
     print("== T6 记账闭环（先建临时账本）==")
     with tempfile.TemporaryDirectory() as td:
@@ -112,6 +129,8 @@ def main() -> int:
     if FAILS:
         print(f"❌ 预算闸注入测试失败 {len(FAILS)} 项: {FAILS}")
         return 1
+    if SKIPS:
+        print(f"[SKIP] {len(SKIPS)} 项环境前提不成立: {SKIPS}")
     print("✅ D-3 预算闸注入测试全过（6 组：委托健康/记账闭环/耗尽拦截/本地优先/逃生门/归因）")
     return 0
 

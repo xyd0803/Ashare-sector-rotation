@@ -41,6 +41,14 @@ jobs:
         # Covers the seven red-team suites plus the offline-demo smoke test.
         # No credentials are configured here on purpose: if any test ever starts
         # requiring a key, CI must fail rather than silently skip.
+        #
+        # XYD_SKILLS_ROOT points at a directory that does not exist, so the
+        # optional shared-module delegation is deterministically unavailable —
+        # the same shape as a clean clone on any machine. Without this, the
+        # result would depend on whether the runner image happens to ship a
+        # similar skills directory, and the fallback path would never be run.
+        env:
+          XYD_SKILLS_ROOT: ${{ runner.temp }}/no-skills
         run: python -m pytest -q
 
       - name: Publication guard
