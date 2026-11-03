@@ -150,13 +150,13 @@ git push github main
 
 ## 6. 本地技能不受影响的五条铁律
 
-这个目录**同时是活动技能目录和 git 仓库**（`~/.workbuddy/skills/XYD-supply-demand-sector`）。
+这个目录**同时是活动技能目录和 git 仓库**（下文以 `<skill-dir>` 指代）。
 git 只是在旁边多了一个 `.git/`，技能加载只读 `SKILL.md`，所以**加版本控制本身不影响技能运行**。
 真正会伤到技能的是下面五件事：
 
 1. **不要在这个目录切分支。**
    `git checkout local-backup` 会把 516 个备份文件倒进工作区，技能目录瞬间变成另一副样子。
-   备份走独立 worktree（`~/.workbuddy/skills/.XYD-supply-demand-sector-local-backup`），
+   备份走独立 worktree（`<skill-parent>/.<dir-name>-local-backup`），
    要用就 `git worktree add ./restore local-backup` 到别的路径去。
 
 2. **永远不要在这里执行 `git clean -xdf`。**

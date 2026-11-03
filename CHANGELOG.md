@@ -109,7 +109,7 @@
   - 覆盖 `DG-PRICE-SINGLE / DG-PRICE-DIVERGE / DG-PB-SINGLE / DG-STALE-WARN / DG-QUANT-MISSING / DG-NO-10Y / DG-IM-UNRETRIEVED / DG-EVENT-UNRETRIEVED / DG-EVENT-CORRUPT / DG-BVPS-CALIBER-OLD` 与 `MS-SERIES / MS-PB-PCT / MS-PRICE / IV-STALE-HARD / IV-BVPS-CALIBER`。
   - 接线：`run_sector_pipeline._assess_data_health()`（fail-open 但有 `deferred` 标记，避免「未评估」冒充「评估通过」）→ 草稿 `_data_health`；`analyze_etf` 把水印打到 stdout 并附到 verdict 顶层 `_data_health{status,counts,items,watermark,schema:D8-four-state/1,applied_stage}`。**是标注层**：`status`/胜率/EV/仓位/闸门判定完全不受影响（实跑 512800：verdict status=OK 且 `_data_health=DEGRADED` —— 二者语义不同，不得互相覆盖）。
   - ⚠️ **口径自纠（S-13）**：初版 `bvps_caliber_mutation=True` 一律判 INVALID，实跑 512800 误杀——D-4 扫出的唯一突变是 **2014-12（142 个月前）**，主锚用的是近 5 年日频，该突变不在主锚窗口内。改为按 `caliber_events` 的 `_months_ago()` 与 **60 个月**切分：窗口内 → INVALID `IV-BVPS-CALIBER`；全在窗口外 → DEGRADED `DG-BVPS-CALIBER-OLD`（仅 10y 交叉口径打折）；只有 bool 无明细 → 维持 INVALID（fail-closed）。实跑后由 INVALID 正确降为 DEGRADED（3 项：口径突变窗口外 + 行业量价未取证 + 事件腿未取证）。
-- **L-4 欠账登记（`BACKLOG.md` + `check_backlog.py` 新建）**：把散落在 CHANGELOG 叙事段、`技能审议_2026-08-16.md` V 系列、三维审计 E-4/E-5/L-5 里的未完结项收敛为**单一权威表**（7 列：ID/欠账/来源/等级/状态/定义与验收/依赖），首批登记 **10 条**：
+- **L-4 欠账登记（`BACKLOG.md` + `check_backlog.py` 新建）**：把散落在 CHANGELOG 叙事段、2026-08-16 评审的 V 系列、三维审计 E-4/E-5/L-5 里的未完结项收敛为**单一权威表**（7 列：ID/欠账/来源/等级/状态/定义与验收/依赖），首批登记 **10 条**：
   - **V11**（B-01，P2 待定）= 单标的 EV/仓位为毛利口径，交易成本只在 backtest 层扣，单标的输出未提示净额；**V13**（B-02，P1 待定）= 回测与引擎 quant 路径同源化——2026-08-16 已核对结论为「共同病根非逻辑漂移」（回测 `real_features` 只产占位特征、从未调 `quant_winrate.compute_quant`），真正同源化阻塞于真实 D1–D5 接入（B-10）。
   - 另含 B-03 iFinD 日历日序列机械过滤（P1 待办）、B-04 159755 月频缺口（S-12）、B-05 pyflakes benign 遗留、B-06 连接器矩阵无实战样例、B-07 E-4 现价并行、B-08 E-5 端到端口径、B-09 L-5 双价格保守侧常驻披露、B-10 O1 量化派生真实化。
   - **闸门化**：`check_backlog.py` 校验 schema（7 列固定顺序）/ID `B-NN` 唯一连续/等级状态枚举/定义≥20 字（防空壳）/依赖存在且不自依赖；挂 `selfcheck_all.py`（run_all 第 3 步）**且**新增 preflight `check_health_backlog`（入口硬闸，同时断言 D-7→D-8 接线：分歧必须产出 `DG-PRICE-DIVERGE`，否则水印丢失）。`REAL_CHECKS` 增「健康度与欠账闸」。
@@ -176,7 +176,7 @@
 
 ## 2026-09-07 端到端审议 + P0~P2 治理落地（engine 1.9.0 · params 1.10.0 未动 · 指纹不变）
 
-- **审议报告**：`技能审议_2026-09-07.md`（五维度评估 + 低级错误五根因 RC1~RC5）。
+- **内部评审**：五维度评估 + 低级错误五根因 RC1~RC5。
 - **P0-① 未填即错（根治 RC1）**：`SectorInput` 判断字段默认值 demand(growth)/volume/price/forward(flat)/imagination(B) 全部改 `""`；`run()` 顶部新增校验——缺失 → `[MUST] 判断字段缺失` blocker（PENDING_VERIFICATION、仓位归零），内部仅映射保守值（cyclical/flat/B）防 crash。红队新增 M 组（M1 全缺 / M2 单缺 demand 对照）。
 - **P0-② 固定编排入口 `analyze_etf.py`（根治 RC3）**：pipeline 草稿→FILLS 完整性预检（缺项 exit4 逐项点名）→合并（`_`键剥离+锁定字段保护+`_fill_meta` provenance）→llm_fill_guard（MUST→exit6）→引擎→`runs/<date>/verdict_<tag>.json`。FILLS 缺 forward_evidence/vp_basis 曾实测拦截两例，均为预期行为。
 - **P0-③ SKILL.md 瘦身 + `make_stats.py`（根治 RC2）**：本文件迁出叙事；SKILL.md 嵌 AUTO:STATS 块，`make_stats.py --check` 断言文档数字与实际一致。
@@ -186,7 +186,7 @@
 
 ## 以下为迁出的历史叙事（原文保留 · 2026-08-16 ~ 2026-09-04）
 
-## 已知漏洞与待办（技能审议 2026-08-16 · 完整版见 `技能审议_2026-08-16.md`）
+## 已知漏洞与待办（2026-08-16 评审）
 
 > 2026-08-16 对技能做程序实现/分析流程/逻辑设计三维度审议，结论：**工程完成度最高、纪律闭环最硬，但本质是"统计分位+规则映射"引擎**，核心薄弱点在三处，已排优先级。
 
