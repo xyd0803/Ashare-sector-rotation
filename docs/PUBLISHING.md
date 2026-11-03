@@ -56,27 +56,34 @@ git config core.hooksPath .githooks
 
 ### 3.2 身份：先决定用哪个邮箱
 
-当前全部提交的邮箱是 `<gitee-noreply>@user.noreply.gitee.com`。
-它是 Gitee 的 noreply 地址：**不可反查**，所以在 GitHub 上公开也不会泄露联系方式。
-代价是 GitHub 认不出这个域，提交不会关联到你的账号（作者显示为纯文本、贡献图不计）。
-要亮贡献图，必须按下面换成 GitHub 自己的 noreply。
+提交身份必须用 **GitHub 专属 noreply**，形如
+`12345678+用户名@users.noreply.github.com`（GitHub → Settings → Emails →
+勾选 *Keep my email addresses private* 后可见）。当前全部提交已统一为
+`73050370+xyd0803@users.noreply.github.com`。
 
-如果你想换成 GitHub 自己的 noreply（形如 `12345+用户名@users.noreply.github.com`，
-可以在 GitHub → Settings → Emails 里查到），注意 `git config` **只影响新提交**，
-已有历史要再改写一次：
+为什么不用别家的 noreply（如 Gitee 的）：地址本身确实**不可反查**，不会泄露联系方式，
+但 GitHub 认不出这个域，提交不会关联到账号——作者显示为纯文本、贡献图不计，
+同时会把公开的 GitHub 账号与那个账号关联起来。对「攒星标 / 当简历项目」这个目标
+是纯负分。
+
+注意 `git config user.email` **只影响新提交**，已有历史要再改写一次
+（`--env-filter` 同时改 author 与 committer，缺一个就会残留）：
 
 ```bash
 FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter '
 export GIT_AUTHOR_EMAIL="你的GitHub noreply"
 export GIT_COMMITTER_EMAIL="你的GitHub noreply"
 ' -- --branches
-git update-ref -d refs/original/refs/heads/main 2>/dev/null
+# refs/original 会钉住旧对象，必须清干净，否则 gc 归零不了
+git for-each-ref --format='%(refname)' refs/original | xargs -r -n1 git update-ref -d
 git reflog expire --expire=now --all && git gc --prune=now --quiet
-git push --force-with-lease origin main
+git push --force-with-lease origin main local-backup   # 私有备份仓也要跟着改
 ```
 
 改写后务必重跑 `check_public_ready.py`：旧邮箱会以 `refs/original` 或 reflog
-的形式残留，只有 `gc` 之后才真正消失。
+的形式残留，只有 `gc` 之后才真正消失。若之前推过私有备份仓（`origin`），
+它的远端分支同样钉住旧对象，需 `git fetch --prune` 后再验一次
+`git log --all --format='%ae' | sort -u`。
 
 ### 3.3 推送
 
