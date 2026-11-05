@@ -425,6 +425,25 @@
       "status": "fixed",
       "date": "2026-10-25",
       "fix_location": "render_verdict_card.py（ps_na 三态 + ps_price 回落 + win_txt/tail_down_txt 兜底 + EV disclosure 显示）；discipline.py:1304-1310（disclosure 拆分）"
+    },
+    {
+      "id": "S-22",
+      "title": "闸门只做全量遍历、不认 --codes → 目标信号被库级噪音淹没",
+      "class": "B_recurring",
+      "symptom": "`preflight_etf.py --codes 516510` 与 `--codes 512800` 输出完全相同：都列 30 只与本次分析无关的陈旧缓存。目标已刷新时看不出「我这只没问题」，目标陈旧时也分不清「坏的是我还是别人」——「分析前检查数据新鲜度」这一动作实际不可执行（2026-11-04 实测发现）。",
+      "root_cause": "闸门编写时把「库级健康巡检」与「本次目标能否分析」混为一谈：check_report_cycle / check_cache_honesty 无条件 glob 整个 data/index_daily_pb|pe，签名里连 codes 参数都没有。库里的历史欠账（30 只停在 10-23）会持续污染每一次单标的体检。",
+      "remedy": "两条闸增可选 codes：ETF 代码经 etf_index_map.json 反查 index_code（也接受直接传缓存键），仅目标命中者升 MUST/WARN，无关项折一行「另有 N 只已忽略」；目标全新鲜时返回 PASS 并显式列出「as_of=… 已含 <期> 财报 ✓」；目标无缓存在本地升 WARN（此前完全静默）；as_of 虚报仍全量查（数据诚信与本次看谁无关）；codes 缺省保持原全量行为（零回归）。",
+      "guard": {
+        "type": "preflight",
+        "check_id": "财报周期闸",
+        "proof": "本次目标未命中·已忽略"
+      },
+      "blast_radius": "gate",
+      "stock_side": "纯判定聚焦，不改任何数据；顺手让「目标无缓存」从静默升级为 WARN（此前 3 只原缺指数 AU9999.SGE/N225.GI/NDXTMC.GI 分析时会一路跑到分位才炸）",
+      "residual_ok": null,
+      "status": "fixed",
+      "date": "2026-11-04",
+      "fix_location": "preflight_etf.py::_codes_to_index_keys / check_report_cycle / check_cache_honesty"
     }
   ]
 }

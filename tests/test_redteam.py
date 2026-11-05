@@ -17,6 +17,7 @@ calling a vendor. One case (D-7/D-8's T10) drives a full pipeline and therefore
 needs fresh local data; it is skipped unless run with ``--with-integration``.
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -33,8 +34,22 @@ SUITES = [
     ("_test_ifind_budget_gate_20261025.py", "iFinD budget gate and ledger"),
     ("_test_merge_regress_20261025.py", "valuation-gap merge stays bit-identical"),
     ("_test_s16_batch_resilience_20261025.py", "batch survives empty/failing connector"),
+    ("_test_scope_gate_20261104.py", "freshness gates honour --codes instead of flooding"),
 ]
-IDS = [name.removeprefix("_test_").removesuffix("_20261025.py") for name, _ in SUITES]
+
+
+def _suite_id(name: str) -> str:
+    """`_test_foo_20261025.py` -> `foo`. Dates vary per suite, so strip generically.
+
+    Pinning the suffix to `_20261025.py` silently mis-ids any suite added on a
+    later date (the id would keep the whole filename); a regex keeps the id
+    stable as suites are added.
+    """
+    m = re.fullmatch(r"_test_(.+?)_\d{8}\.py", name)
+    return m.group(1) if m else name.removeprefix("_test_").removesuffix(".py")
+
+
+IDS = [_suite_id(name) for name, _ in SUITES]
 
 
 def _child_env():

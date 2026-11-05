@@ -27,6 +27,7 @@ MODULES = [
     ("check_backlog", "欠账登记表(L-4)"),
     ("check_pitfall_closure", "坑→守卫闭环(S-20)"),
     ("_test_card_null_20261025", "卡片空值渲染(S-21)"),
+    ("_test_scope_gate_20261104", "闸门作用域聚焦(S-22)"),
     ("trade_calendar", "分市场交易日历(B-03)"),
 ]
 

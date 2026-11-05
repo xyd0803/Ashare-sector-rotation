@@ -443,7 +443,7 @@ Step 5: 想象力调节
 | `backtest.py` | 简洁回测骨架（point-in-time / t+1 / 成本 / 指纹；待 ETF 名单到位后填真实特征） |
 | `calibrate_winrate.py` | **g(S) 校准骨架（O5 · 2026-08-16 新增）**：用 54 ETF 历史信号→持有期胜率回归拟合 `win_map`，替换 `quant_winrate` 的占位 g(S)。定义 `backtest_features.json` 数据契约（S + point-in-time win），提供 empirical 分桶 / logistic 两种拟合 + 校验（分桶校准误差+AUC+单调性），`--demo` 合成数据端到端自证；待 54 ETF 回测出数后 `--input` 产出 `proposed_win_map.json`（落地须人工审 + bump version + 更新指纹锁）。`python calibrate_winrate.py --selfcheck` |
 | `run_all.py` | 一键运营自检闸门（串联：EtfPreflight→指纹锁→模块自检→红队→压力→回测） |
-| `preflight_etf.py` | **🔴 运行前体检（2026-10-07 新增·发布闸第一步，日常也必须第一步跑）**：秒级·不联网·零积分，一次性检出 ①依赖 pandas ②fetch_one 签名含 metric ③CLI 参数契约 ④缓存 as_of 诚实性(必须==序列末值) ⑤硬编码结论字面量(AST 取真实常量·跳过 docstring/注释) ⑥SKILL 统计块 ⑦warnings 落盘契约 ⑧FILLS 含锁定字段。exit=0 可直跑 / exit=3 **禁止直跑**（先修完）<br>**立此脚本的依据**：两只 ETF 纯机器链路实测 3005ms，端到端却约 1h（放大 ~1200×）；当天撞到的 9 堵墙 **9/9 均可在运行前静态检出**，却全部靠"跑到一半才炸"暴露——每堵墙=1 轮完整往返。用法 `python preflight_etf.py [--codes 159755,515790] [--json]` |
+| `preflight_etf.py` | **🔴 运行前体检（2026-10-07 新增·发布闸第一步，日常也必须第一步跑）**：秒级·不联网·零积分，一次性检出 ①依赖 pandas ②fetch_one 签名含 metric ③CLI 参数契约 ④缓存 as_of 诚实性(必须==序列末值) ⑤硬编码结论字面量(AST 取真实常量·跳过 docstring/注释) ⑥SKILL 统计块 ⑦warnings 落盘契约 ⑧FILLS 含锁定字段。exit=0 可直跑 / exit=3 **禁止直跑**（先修完）<br>**立此脚本的依据**：两只 ETF 纯机器链路实测 3005ms，端到端却约 1h（放大 ~1200×）；当天撞到的 9 堵墙 **9/9 均可在运行前静态检出**，却全部靠"跑到一半才炸"暴露——每堵墙=1 轮完整往返。用法 `python preflight_etf.py [--codes 159755,515790] [--json]`<br>**`--codes` 聚焦语义（2026-11-04 修复）**：`缓存诚实性`（stale>15天部分）与 `财报周期闸` 会按 `--codes` **只报与本次目标相关**的缓存（ETF 代码经 `etf_index_map.json` 反查 `index_code`，也可直接传指数缓存键如 `000510.CSI`）；库内无关陈旧折成一行「另有 N 只已忽略」。目标全部新鲜 → `[PASS]` 并显式列出 `<index_code> as_of=… 已含 <报告期> 财报 ✓`；**目标本地无 PB/PE 缓存 → WARN**（分位算不出来，先取数）。`as_of 虚报` 仍全量查（数据诚信问题与"本次看谁"无关）。不传 `--codes` = 原有全量行为（零回归） |
 | `PITFALLS_SDS.md` | **🔴 踩坑登记（preflight 的弹药库）**：撞墙必登记，且每条必须带 `@preflight:` 标签指向**真实存在**的检查项。preflight 的「坑登记覆盖度」项会校验标签是否兑现——**登记了坑却没有对应检查 = 未闭环 = MUST FAIL**。目的是防止新坑石沉大海、下个会话重撞一遍 |
 
 ### 🔴 防 LLM 反复撞墙的三层保障（2026-10-07 立）
@@ -631,6 +631,11 @@ bear_eff = max(bear, P·(1 − stop_pct − friction_pct))
 - **V10 锚定 p95 泡沫延伸（生效中）**：`_build_bands` 另算「锚定 p95」=剔除近 `odds.anchor_exclusion_months=18` 月的序列 p95；`now/锚定p95 ≥ bubble_warn_ratio(1.3)` → 泡沫延伸警示（SHOULD，收紧 O4 豁免、显著降仓）、`≥ bubble_hard_ratio(1.6)` → 泡沫延伸硬否决（MUST，强制减仓/清仓）。需日频真实序列，否则回退 `p95×0.9`。V11/V13 待定。
 - **国证指数数据配方（980032 类）**：妙想返回结构 `table.<指标ID>`（328664=PB、328773=PE）+ `headName` 存日期（`table.items` 恒空）；双源/手算兜底=国证官网 cnindex 成分股权重 + 东财 push2 成分股 PB/PE 加权（与妙想差<2%）；tdx 不覆盖国证指数；**159755→980032.CNI（不是 931719.CSI，那是 159796），勿混**。
 - **数据新鲜度与产物纪律**：`data_refresh.py --status`（fresh≤7/warn≤15/stale>15）；O7 闸 >15 天 MUST 重取。会话产物只写 `runs/<tag>/`，历史叙事在 CHANGELOG.md。
+- **🔴 分析 ETF / 行业前的标准第一步（2026-11-04 用户明确约定）**：先跑 `python preflight_etf.py --codes <本次要分析的 ETF>`（行业指数直接传缓存键），**只看该目标的 `缓存诚实性` / `财报周期闸` 两行**：
+  · `[PASS]` + `as_of=… 已含 <期> 财报 ✓` → 新鲜度合格，可直跑；
+  · `[WARN/MUST] <该 index_code> as_of=… 早于 <期> 披露截止` → 该只 PB/PE 分母未含最新财报，分位/锚价系统性失真（PB 偏高→锚价偏低→结论方向偏空），**必须先重建再分析**（`data_refresh.py --codes …` 或免费源 `neodata`）；
+  · `本地无 PB/PE 缓存` → 分位算不出来，先取数，别硬跑。
+  不再接受「库里 30 只陈旧」这类库级噪音替代对目标本身的判断——那是另一个问题（要不要批量刷新），与本只能不能分析无关。
 
 ---
 

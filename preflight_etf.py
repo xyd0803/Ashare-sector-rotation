@@ -100,6 +100,37 @@ def _days(a: str, b: str | None = None) -> int | None:
         return None
 
 
+def _codes_to_index_keys(codes: list[str] | None) -> dict[str, str]:
+    """ETF 代码 → 本地缓存键（{缓存键: 用户输入的原始代码}）。空输入返回 {}。
+
+    为什么要这层转换（2026-11-04）：新鲜度/财报周期两条闸原先**无条件遍历
+    `data/index_daily_pb|pe` 全量缓存**。库里 56 只指数有 30 只停在旧期时，
+    分析一只**已刷新**的 ETF 也会被 30 条无关告警淹没——信号被噪音吃掉，
+    「检查数据新鲜度」变成不可执行的口号。本函数把 `--codes` 的 ETF 映射到
+    它真正的缓存键（`etf_index_map.json` 的 `index_code`），让闸能聚焦目标。
+
+    两种合法输入：
+      · ETF 代码（`513180`）→ 经映射表取 `HSTECH.HI`；
+      · 直接给缓存键（行业指数场景，`000510.CSI`）→ 原样使用（映射表查不到即按缓存键处理）。
+    映射表读不到时降级为「原样当缓存键」——宁可查不到也不虚构映射。
+    """
+    codes = [c.strip() for c in (codes or []) if c and c.strip()]
+    if not codes:
+        return {}
+    try:
+        m = json.load(open(MAP_PATH, encoding="utf-8"))
+        if not isinstance(m, dict):
+            m = {}
+    except Exception:
+        m = {}
+    out: dict[str, str] = {}
+    for c in codes:
+        ent = m.get(c) or m.get(c.upper())
+        ic = ent.get("index_code") if isinstance(ent, dict) else None
+        out[str(ic) if ic else c] = c
+    return out
+
+
 # ----------------------------------------------------------------- 检查项实现
 
 def check_deps() -> tuple[str, str, list[str]]:
@@ -135,9 +166,18 @@ def check_fetcher_signature() -> tuple[str, str, list[str]]:
     return ("fetch_one 签名", "MUST" if errs else "OK", errs)
 
 
-def check_cache_honesty() -> tuple[str, str, list[str]]:
-    """⑤ 缓存诚实性：as_of 必须 == 序列末值日期（虚报新鲜会让新鲜度门失效）。"""
-    errs, warns = [], []
+def check_cache_honesty(codes: list[str] | None = None) -> tuple[str, str, list[str]]:
+    """⑤ 缓存诚实性：as_of 必须 == 序列末值日期（虚报新鲜会让新鲜度门失效）。
+
+    2026-11-04 分治：`as_of 虚报` 全量查（数据诚信问题，与"本次看谁"无关）；
+    `stale > FRESHNESS_MAX_DAYS` 按 `--codes` 聚焦（有 codes 时只报目标，
+    其余折成一行汇总）。原因同 `_codes_to_index_keys` 注释：无关陈旧的 30 只
+    会把真实目标的 stale 信号淹没。无 codes → 保持全量（零回归）。
+    """
+    keys = _codes_to_index_keys(codes)
+    scoped = bool(keys)
+    errs, warns, infos = [], [], []
+    stale_others = 0
     for d, tag in [(PB_DIR, "PB"), (PE_DIR, "PE")]:
         if not os.path.isdir(d):
             continue
@@ -156,8 +196,15 @@ def check_cache_honesty() -> tuple[str, str, list[str]]:
                 errs.append(f"{name}({tag}) as_of={aof} 但序列末值={tail} → 虚报新鲜 {_days(aof, tail)} 天")
             gap = _days(tail)
             if gap is not None and gap > FRESHNESS_MAX_DAYS:
-                warns.append(f"{name}({tag}) stale {gap} 天 >{FRESHNESS_MAX_DAYS} 天")
-    return ("缓存诚实性", "MUST" if errs else ("WARN" if warns else "OK"), errs + warns)
+                if scoped and os.path.basename(fp)[:-5] not in keys:
+                    stale_others += 1
+                else:
+                    warns.append(f"{name}({tag}) stale {gap} 天 >{FRESHNESS_MAX_DAYS} 天")
+    if stale_others:
+        infos.append(f"库内另有 {stale_others} 只无关缓存 stale >{FRESHNESS_MAX_DAYS} 天"
+                     f"（本次目标未命中·已忽略；要看全量就去掉 --codes）")
+    lvl = "MUST" if errs else ("WARN" if warns else "OK")
+    return ("缓存诚实性", lvl, errs + warns + infos)
 
 
 def _report_deadlines(today: date | None = None) -> list[tuple[str, date]]:
@@ -170,8 +217,8 @@ def _report_deadlines(today: date | None = None) -> list[tuple[str, date]]:
     return sorted(out, key=lambda x: x[1])
 
 
-def check_report_cycle() -> tuple[str, str, list[str]]:
-    """⑤b 财报周期闸（2026-10-24·跨技能同类漏检修复）。
+def check_report_cycle(codes: list[str] | None = None) -> tuple[str, str, list[str]]:
+    """⑤b 财报周期闸（2026-10-24·跨技能同类漏检修复；2026-11-04 按目标聚焦）。
 
     病灶：本 skill 的 PB/PE 序列是「日频点位 ÷ 慢变量 BVPS/EPS」重建出来的
     （rebuild_pb_daily.py 明文："BVPS 为慢变量（财报级更新）"）。一旦新的法定披露期
@@ -183,14 +230,25 @@ def check_report_cycle() -> tuple[str, str, list[str]]:
     判定：取**已过截止日**里最晚那个报告期 D；序列 as_of < D → 该序列未含该期财报。
       · 距 D 已 > REPORT_CYCLE_GRACE_DAYS → MUST（不该拖这么久还没重建）
       · 否则 → WARN（刚过披露期，留出重建窗口，不误杀）
+
+    2026-11-04 增加 `codes` 聚焦（默认 None = 原有全量行为，零回归）：
+      传 `--codes` 时，只有**本次目标命中的缓存**能升 MUST/WARN，无关陈旧缓存折成一行
+      汇总；目标全部新鲜时返回 OK 并显式列出「已含 rp 财报」，让人一眼确认。
+      目标在本地**没有缓存**时升 WARN（分位根本算不出来，必须先取数）——
+      这是"检查新鲜度"最该报出来的一种情况，此前完全静默。
     """
     t = date.today()
     passed = [(p, d) for p, d in _report_deadlines(t) if d <= t]
     if not passed:
         return ("财报周期闸", "OK", [])
     rp, dl = passed[-1]
-    errs, warns = [], []
+    tgt = _codes_to_index_keys(codes)
+    scoped = bool(tgt)
+    errs, warns, infos = [], [], []
     checked = 0
+    hit: dict[str, str] = {}      # 缓存键 → 该目标最新 as_of
+    stale_tgt: set[str] = set()
+    stale_others = 0
     for d, tag in [(PB_DIR, "PB"), (PE_DIR, "PE")]:
         if not os.path.isdir(d):
             continue
@@ -204,6 +262,11 @@ def check_report_cycle() -> tuple[str, str, list[str]]:
                 continue
             checked += 1
             tail = str(series[-1][0])[:10]
+            stroke = os.path.basename(fp)[:-5] if fp.endswith(".json") else os.path.basename(fp)
+            is_tgt = (stroke in tgt) if scoped else True
+            if is_tgt and stroke in tgt:
+                prev = hit.get(stroke)
+                hit[stroke] = tail if not prev else max(prev, tail)
             try:
                 lag = (dl - date.fromisoformat(tail)).days
             except Exception:
@@ -217,11 +280,27 @@ def check_report_cycle() -> tuple[str, str, list[str]]:
             msg = (f"{name}({tag}) as_of={tail} 早于 {rp} 报告期披露截止 {dl}"
                    f"（as_of 差 {lag} 天·披露截止已过 {overdue} 天）"
                    f"→ BVPS/EPS 锚点未含该期财报，PB/PE 分位系统性失真")
-            (errs if overdue > REPORT_CYCLE_GRACE_DAYS else warns).append(msg)
+            if is_tgt:
+                stale_tgt.add(stroke)
+                (errs if overdue > REPORT_CYCLE_GRACE_DAYS else warns).append(msg)
+            else:
+                stale_others += 1
+    if scoped:
+        missing = sorted(k for k in tgt if k not in hit)
+        fresh = sorted(k for k in hit if k not in stale_tgt)
+        for k in missing:
+            src = tgt.get(k, "")
+            warns.append(f"{k}（输入 {src}）本地无 PB/PE 缓存 → 分位/锚价算不出来，"
+                         f"先取数再分析（etf_index_map 无此映射时确认传的是缓存键）")
+        for k in fresh:
+            infos.append(f"{k} as_of={hit[k]} 已含 {rp} 财报 ✓")
+        if stale_others:
+            infos.append(f"库内另有 {stale_others} 只无关缓存停在该截止日前"
+                         f"（本次目标未命中·已忽略；要看全量就去掉 --codes）")
     if errs:
         errs = errs[:6] + ([f"…另有 {len(errs) - 6} 个同类（共 {len(errs)}/{checked}）"] if len(errs) > 6 else [])
     lvl = "MUST" if errs else ("WARN" if warns else "OK")
-    return ("财报周期闸", lvl, errs + warns)
+    return ("财报周期闸", lvl, errs + warns + infos)
 
 
 def check_hardcode() -> tuple[str, str, list[str]]:
@@ -509,12 +588,17 @@ def check_connector_matrix() -> tuple[str, str, list[str]]:
 def run(codes: list[str] | None = None) -> list[dict]:
     codes = codes or []
     results = []
+    # 逐项注册（`codes` 只喂给需要聚焦目标的闸：缓存诚实性/财报周期/FILLS；
+    # 其余为库级健康闸，传了也无意义 · 2026-11-04）
     for fn in (check_deps, check_fetcher_signature, check_cli_contract,
-               check_cache_honesty, check_report_cycle, check_hardcode, check_release_stats,
+               check_hardcode, check_release_stats,
                check_meta_warnings_contract, check_ifind_budget, check_quant_raw_assembly,
                check_lint_optional, check_connector_matrix, check_health_backlog,
                check_pitfall_closure_gate, check_pitfall_coverage):
         name, level, msgs = fn()
+        results.append({"check": name, "level": level, "msgs": msgs})
+    for fn in (check_cache_honesty, check_report_cycle):
+        name, level, msgs = fn(codes)
         results.append({"check": name, "level": level, "msgs": msgs})
     if True:  # FILLS 检查始终跑（无 codes 时扫全量）
         name, level, msgs = check_fills(codes)
