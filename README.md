@@ -85,7 +85,7 @@ Drop the repository into your agent's skills directory and point it at `SKILL.md
 ```bash
 # Claude Code / compatible harness
 git clone https://github.com/xyd0803/Ashare-sector-rotation.git \
-  ~/.claude/skills/ashare-sector-rotation
+  ~/.claude/skills/Ashare-sector-rotation
 ```
 
 Then ask in natural language. The agent reads the skill contract, decides which entry point

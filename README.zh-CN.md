@@ -76,7 +76,7 @@ python discipline.py --demo
 ```bash
 # Claude Code 或兼容的 agent 框架
 git clone https://github.com/xyd0803/Ashare-sector-rotation.git \
-  ~/.claude/skills/ashare-sector-rotation
+  ~/.claude/skills/Ashare-sector-rotation
 ```
 
 然后用自然语言提问即可。agent 读技能契约，自己决定调哪个入口，并受与人类操作者相同的
