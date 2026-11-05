@@ -118,6 +118,8 @@ def build_market_calendar(market: str, verbose: bool = False) -> dict:
     counts: Counter = Counter()
     cover: Counter = Counter()       # 年月 → 覆盖该月的序列数
     n_files = 0
+    lasts: list[str] = []            # 每条序列的末值（诊断用）
+    spans: list[tuple[str, str]] = []  # 每条序列的 [首值, 末值] 覆盖区间
     for code, p in _series_files():
         if market_of(code) != market:
             continue
@@ -126,22 +128,48 @@ def build_market_calendar(market: str, verbose: bool = False) -> dict:
             continue
         n_files += 1
         uniq = set(days)
+        lasts.append(max(uniq))
+        spans.append((min(uniq), max(uniq)))
         for ym in {d[:7] for d in uniq}:
             cover[ym] += 1
         for d in uniq:
             counts[d] += 1
-    days_out, suspect = [], []
+
+    # B-03 补丁（2026-11-04）——多数票分母必须只数「有能力投票」的序列
+    # ------------------------------------------------------------------
+    # 旧实现：need = ceil(cover[月份] × 0.5)，分母是「该月有数据的序列数」。
+    # 增量刷新过渡期会产出自相矛盾的日历（实测）：
+    #   · 30 条序列止于 10-23、21 条已到 11-03
+    #   · 10-26：cover(2026-10)=51 → need=26，实得 21 票 → **判休市**（删真实交易日）
+    #   · 11-02：cover(2026-11)=21 → need=11，实得 21 票 → 通过
+    #   ⇒ 同一份日历「接受 11-02/11-03 却否定夹在中间的 10-26~10-30」。
+    # 根因：序列结束得早 = **没数据**，不是**否决票**，不该计入分母。
+    # 修法：分母改为 can_vote(d) = 覆盖区间包含 d 的序列数（只有它们投得出票）；
+    # 且 can_vote < MIN_SERIES 时证据不足 → 不判定（落区间外 ⇒ None ⇒ 调用方保留）。
+    def _can_vote(d: str) -> int:
+        return sum(1 for f, l in spans if f <= d <= l)
+
+    support_end = None
+    if len(lasts) >= MIN_SERIES:
+        support_end = sorted(lasts, reverse=True)[MIN_SERIES - 1]
+
+    days_out, suspect, unsupported = [], [], []
     for d, c in counts.items():
         if _dt.date.fromisoformat(d).weekday() >= 5:
             suspect.append(d)                    # 周末点：永不算交易日
             continue
-        need = max(1, math.ceil(cover[d[:7]] * MIN_VOTE_RATIO))
+        can = _can_vote(d)
+        if n_files >= MIN_SERIES and can < MIN_SERIES:
+            unsupported.append(d)                # 证据不足 → 不判定（保留数据）
+            continue
+        need = max(1, math.ceil(min(cover[d[:7]], can) * MIN_VOTE_RATIO))
         if c >= need:
             days_out.append(d)
         else:
             suspect.append(d)                    # 有票未过半 → 休市日被写成有值
     days_out.sort()
     suspect.sort()
+    unsupported.sort()
     available = bool(days_out) and n_files >= MIN_SERIES
     cal = {
         "market": market,
@@ -151,8 +179,11 @@ def build_market_calendar(market: str, verbose: bool = False) -> dict:
         "n": len(days_out),
         "start": days_out[0] if days_out else None,
         "end": days_out[-1] if days_out else None,
+        "support_end": support_end,
         "suspect_n": len(suspect),
         "suspect": suspect,
+        "unsupported_n": len(unsupported),
+        "unsupported": unsupported,
         "days": days_out,
     }
     if verbose:
@@ -162,6 +193,10 @@ def build_market_calendar(market: str, verbose: bool = False) -> dict:
         if suspect:
             print(f"  [交易日历·{market}] 否决 {len(suspect)} 个「有值但非交易日」可疑点"
                   f"：{suspect[:6]}", file=sys.stderr)
+        if unsupported:
+            print(f"  [交易日历·{market}] {len(unsupported)} 个日期晚于 support_end="
+                  f"{support_end}（覆盖序列 <{MIN_SERIES} 条）→ 证据不足·不判定，"
+                  f"涉及时点保留待核：{unsupported[:6]}", file=sys.stderr)
     return cal
 
 
@@ -255,6 +290,8 @@ def is_trading_day(d: str, market: str = "cn") -> bool | None:
 
     **None 时调用方必须保留数据并 WARN** —— 不装懂。
     """
+    if d is None:            # B-03 补丁（2026-11-04）：非日期值不参与判定
+        return None
     d = str(d)[:10]
     try:
         _dt.date.fromisoformat(d)
@@ -273,14 +310,20 @@ def is_trading_day(d: str, market: str = "cn") -> bool | None:
 def filter_dates(dates, market: str = "cn", verbose: bool = False) -> dict:
     """按市场交易日过滤日期集合。
 
-    返回 {'kept','dropped','unknown','market','available','range'}
+    返回 {'kept','dropped','unknown','invalid','market','available','range'}
     · dropped = 明确非交易日 → 调用方应剔除；
     · unknown = 无法判定 → **保留**，调用方须 WARN；
+    · invalid = 非日期值（None/空/非法串）→ 原样保留待核，不进 dropped（B-03 补丁 2026-11-04：
+      此前 None 会混进 kept 让 `sorted()` 抛 TypeError，数据缺失时把「不装懂」变成硬崩）；
     · available=False（市场样本不足）→ 全部 keep，调用方须显式提示未过滤。
     """
     mc = _market_cal(market) or {}
-    kept, dropped, unknown = [], [], []
+    kept, dropped, unknown, invalid = [], [], [], []
     for d in dates:
+        if d is None or not str(d).strip():
+            invalid.append(d)
+            kept.append(d)          # 不丢点：非日期值原样保留，交由调用方人工核
+            continue
         r = is_trading_day(d, market)
         if r is True:
             kept.append(d)
@@ -289,18 +332,26 @@ def filter_dates(dates, market: str = "cn", verbose: bool = False) -> dict:
         else:
             unknown.append(d)
             kept.append(d)
-    if verbose and (dropped or unknown):
+
+    def _sk(x):
+        """排序键：str 正常排序；非日期值（None 等）恒排末尾，绝不抛 TypeError。"""
+        return (x is None, "" if x is None else str(x))
+
+    if verbose and (dropped or unknown or invalid):
         msg = f"  [交易日过滤·{market}] 剔除 {len(dropped)} 个非交易日"
         if dropped:
             msg += f"（示例 {dropped[:5]}）"
         if unknown:
             msg += f"；{len(unknown)} 个无法判定（区间外/样本不足）→ 保留待核"
+        if invalid:
+            msg += f"；⚠️ {len(invalid)} 个非日期值（None/空/非法）→ 保留待核"
         print(msg, file=sys.stderr)
     if verbose and not mc.get("available"):
         print(f"  [WARN] {market} 交易日历样本不足（{mc.get('n_series')} 个序列）→ "
               f"**未做交易日过滤**，非交易日点可能残留，须人工核", file=sys.stderr)
-    return {"kept": sorted(kept), "dropped": sorted(dropped),
-            "unknown": sorted(unknown), "market": market,
+    return {"kept": sorted(kept, key=_sk), "dropped": sorted(dropped, key=_sk),
+            "unknown": sorted(unknown, key=_sk), "invalid": len(invalid),
+            "market": market,
             "available": bool(mc.get("available")),
             "range": (mc.get("start"), mc.get("end"))}
 
@@ -397,14 +448,77 @@ def _selfcheck() -> bool:
             "hk 样本不足 → None（不套用 A 股日历删港股真实交易日）")
 
     # 过滤：不丢点 + 剔除非交易日 + 幂等
-    cn_start, cn_end = st["cn"]["start"], st["cn"]["end"]
-    rep = filter_dates([cn_start, "2026-10-03", cn_end, "2001-01-05"], "cn")
-    chk(rep["dropped"] == ["2026-10-03"], "非交易日被剔除")
-    chk("2001-01-05" in rep["kept"], "未知日期保留（不静默删真实数据）")
-    chk(set(rep["kept"]) | set(rep["dropped"]) == {cn_start, cn_end, "2026-10-03", "2001-01-05"},
-        "不丢点：kept∪dropped 覆盖全部输入")
-    rep2 = filter_dates(rep["kept"], "cn")
-    chk(rep2["kept"] == rep["kept"] and not rep2["dropped"], "二次过滤幂等")
+    # B-03 补丁（2026-11-04）：日历不可用时 start/end 为 None，直接喂进 filter_dates
+    # 曾把 None 混入 sorted() → TypeError 硬崩（数据被删时自检不是报红而是崩，掩盖真因）。
+    # 现改为「如实报 FAIL + 跳过依赖日期的断言」，绝不崩、也绝不假装通过。
+    cn_start, cn_end = st.get("cn", {}).get("start"), st.get("cn", {}).get("end")
+    if not cn_start or not cn_end:
+        chk(False, "cn 日历无覆盖区间（available=False / 0 序列）→ 过滤语义无法验证，"
+                   "B-03 闸失效（先修数据：data/index_daily_pb 是否为空）")
+    else:
+        rep = filter_dates([cn_start, "2026-10-03", cn_end, "2001-01-05"], "cn")
+        chk(rep["dropped"] == ["2026-10-03"], "非交易日被剔除")
+        chk("2001-01-05" in rep["kept"], "未知日期保留（不静默删真实数据）")
+        chk(set(rep["kept"]) | set(rep["dropped"]) == {cn_start, cn_end, "2026-10-03", "2001-01-05"},
+            "不丢点：kept∪dropped 覆盖全部输入")
+        rep2 = filter_dates(rep["kept"], "cn")
+        chk(rep2["kept"] == rep["kept"] and not rep2["dropped"], "二次过滤幂等")
+        # 非日期值不得让排序崩溃（回归锁：2026-11-04 sorted(None) TypeError）
+        rep3 = filter_dates([None, cn_start, "", cn_end], "cn")
+        chk(rep3["invalid"] == 2 and None in rep3["kept"],
+            "非日期值(None/空串)不崩、原样保留并计入 invalid")
+
+        # B-03 回归锁（2026-11-04）：增量刷新过渡期，不得把「序列尚未延伸到」误判为休市。
+        # 场景：5 条序列中 3 条止于 10-23、2 条延伸到 10-30 → 旧实现分母用「月份覆盖数」，
+        # 会让 10-26~10-30 以 2/5 被否决（判休市→删真实交易日），同时 11 月新日期仅 1 条
+        # 覆盖却 100% 通过，产出自相矛盾日历。修后：晚于 support_end 一律「证据不足」不判定。
+        import json as _json
+        import shutil as _shutil
+        import tempfile as _tempfile
+        from pathlib import Path as _Path
+        _tmpd = _Path(_tempfile.mkdtemp(prefix="b03tail_"))
+        try:
+            _pbdir = _tmpd / "pb"
+            _pbdir.mkdir()
+            _base = ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]
+            _ext = _base + ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30"]
+            for _i in range(3):
+                (_pbdir / ("99990%d.CSI.json" % _i)).write_text(
+                    _json.dumps({"pb": [[d, 1.0] for d in _base]}), encoding="utf-8")
+            for _i in range(3, 5):
+                (_pbdir / ("99990%d.CSI.json" % _i)).write_text(
+                    _json.dumps({"pb": [[d, 1.0] for d in _ext]}), encoding="utf-8")
+            _g = globals()
+            _old_pb, _old_pe = _g["PB_DIR"], _g["PE_DIR"]
+            _g["PB_DIR"], _g["PE_DIR"] = _pbdir, _tmpd / "pe_none"
+            try:
+                _c2 = build_market_calendar("cn")
+            finally:
+                _g["PB_DIR"], _g["PE_DIR"] = _old_pb, _old_pe
+            chk(_c2["support_end"] == "2026-10-23",
+                "尾部 support_end=第%d大末值 → %s（期望 2026-10-23，2 条孤尾不抬杆）"
+                % (MIN_SERIES, _c2["support_end"]))
+            chk("2026-10-26" not in set(_c2["days"]) and str(_c2["end"]) < "2026-10-26",
+                "过渡期新日期判『证据不足』→ 落区间外（None=保留），绝不判休市删点")
+            chk(_c2["unsupported_n"] > 0,
+                "unsupported 计数可审计（%d 个日期留痕）" % _c2["unsupported_n"])
+
+            # 反向锁：当「有能力投票」的序列 ≥MIN_SERIES 且过半时，必须**不能**误压成休市
+            for _i in range(3, 5):
+                (_pbdir / ("99990%d.CSI.json" % _i)).write_text(
+                    _json.dumps({"pb": [[d, 1.0] for d in _ext]}), encoding="utf-8")
+            for _i in range(1, 3):
+                (_pbdir / ("99990%d.CSI.json" % _i)).write_text(
+                    _json.dumps({"pb": [[d, 1.0] for d in _ext]}), encoding="utf-8")
+            _g["PB_DIR"], _g["PE_DIR"] = _pbdir, _tmpd / "pe_none"
+            try:
+                _c3 = build_market_calendar("cn")
+            finally:
+                _g["PB_DIR"], _g["PE_DIR"] = _old_pb, _old_pe
+            chk("2026-10-26" in set(_c3["days"]) and _c3["end"] == "2026-10-30",
+                "过渡期过半序列已延伸时不得误判休市（分母只数可投票者）")
+        finally:
+            _shutil.rmtree(_tmpd, ignore_errors=True)
 
     print("trade_calendar selfcheck: " + ("OK" if ok else "FAILED"))
     return ok
